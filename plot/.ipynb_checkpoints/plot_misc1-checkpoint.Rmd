@@ -1,0 +1,491 @@
+---
+title: "Plotting for KD efficiency, cell type and sgRNA distribution"
+output: html_document
+date: "2024-05-13"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r load results from DEseq2}
+library("ggplot2")
+library(ggpubr)
+
+#set border colors manually
+unique_colors <- c('FC<75%','FC>75%')
+unique_colors <- c('p<0.05','') 
+border_color <- setNames(c("black","lightgrey"), unique_colors)
+
+dir = '~/Desktop/perturb/'
+dir <- '~/Desktop/perturb/HM2D/'
+
+df <- read.csv(file.path(dir, 'min_log2FC.csv'))
+df$sgRNA <- gsub(".*_","",df$guide)
+df$cutoff <-  -log(df$pvalue) / (1-df$log2FC) 
+rownames(df) <- df$guide
+df$significance <- ifelse(df$pvalue < 0.05, 'p<0.05','n.s.')
+df$select <- ifelse(df$log2FC < -0.4, 'FC<75%','FC>75%')
+df$FC <- 2^(df$log2FC)*100
+
+p <- ggplot(df, aes(x=gene, y=FC),color=sgRNA) + 
+    geom_point(shape = 21, position=position_jitter(w = 0.1,h = 0),size=3, aes(fill = factor(sgRNA), color=factor(significance),stroke = 1)
+    ) + 
+    ylab("%expression to NT") + xlab("") +
+    scale_fill_viridis_d(option = "B") + 
+    #ggsci::scale_fill_jama() +  
+    geom_hline(yintercept = 75, linewidth = 0.8,linetype='dotted')  +
+    scale_color_manual(values=border_color)  + 
+    ggtitle("Percentage expression compared to NT") +
+    theme(plot.title = element_text(hjust = 0.5)) +
+    ylim(0,150) + 
+    stat_summary(fun.y = mean, fun.ymin = mean, fun.ymax = mean, geom = "crossbar", color = "black", size = 0.3) +
+    theme_linedraw() + 
+    theme_classic2() +
+    Seurat::RotatedAxis()
+
+fig_dir = '~/Desktop/perturb/HM2D/figures/'
+pdf(paste(fig_dir, '2D.KD.perc.pdf',sep=''),width=12, height=3)
+print(p)
+dev.off()
+
+#guides that had >76%, 18 guides
+rownames(filter(df, log2FC > -0.4))
+#"ASCL1_g2"  "EMX1_g1"   "EMX1_g2"   "KLF10_g1"  "MEIS2_g3"  "NFIB_g1"   "NFIB_g2"   "NR4A2_g5"  "NR4A2_g6"  "POU2F1_g2" "SATB2_g1"  "SATB2_g3"  "SOX5_g1"   "SOX5_g2"  
+# "SOX5_g3"   "SOX6_g2"   "SOX6_g3"   "SOX9_g1"  
+df <- filter(df, log2FC < -0.4)
+as.data.frame(table(df$gene))
+
+```
+
+```{r 2D gene level}
+library("ggplot2")
+library(ggpubr)
+
+#set border colors manually
+unique_colors <- c('p<0.05','n.s.') 
+unique_colors <- c('%Exp<75%','%Exp>75%')
+border_color <- setNames(c("black","lightgrey"), unique_colors)
+
+dir = '~/Desktop/perturb/HM2D/DEseq2/2D_guides_cleaned/'
+df <- read.csv(file.path(dir, 'min_log2FC.csv'))
+df$cutoff <-  -log(df$pvalue) / (1-df$log2FC) 
+df$pvalue[is.na(df$pvalue)] <- 1
+rownames(df) <- df$guide
+df$significance <- ifelse(df$pvalue < 0.05, 'p<0.05','n.s.')
+df$select <- ifelse(df$log2FC < -0.4, '%Exp<75%','%Exp>75%')
+df$FC <- 2^(df$log2FC)*100
+
+p <- ggplot(df, aes(x=gene, y=FC),color=sgRNA) + 
+    geom_point(shape = 21, position=position_jitter(w = 0.1,h = 0),size=3, aes(fill = factor(significance), color=factor(select),stroke = 1)
+    ) +
+    ylab("%expression to NT") + xlab("") +
+    #scale_fill_viridis_d(option = "B") + 
+    ggsci::scale_fill_jama() +  
+    geom_hline(yintercept = 75, linewidth = 0.8,linetype='dotted')  +
+    scale_color_manual(values=border_color)  + 
+    ggtitle("Percentage expression compared to NT") +
+    theme(plot.title = element_text(hjust = 0.5)) +
+    ylim(0,100) + 
+    #stat_summary(fun.y = mean, fun.ymin = mean, fun.ymax = mean, geom = "crossbar", color = "black", size = 0.3) +
+    theme_linedraw() + 
+    theme_classic2() +
+    Seurat::RotatedAxis()
+
+fig_dir = '~/Desktop/perturb/HM2D/figures/'
+pdf(paste(fig_dir, '2D.KD.genelevel.perc.pdf',sep=''),width=12, height=3)
+print(p)
+dev.off()
+```
+
+
+```{r KD logFC HM2D}
+#HM2D
+library("ggplot2")
+library(ggpubr)
+dir = '~/Desktop/perturb/HM2D/'
+fig_dir = '~/Desktop/perturb/HM2D/figures/'
+
+#set border colors manually
+unique_colors <- c('p<0.05','') 
+#unique_colors <- c('%Exp<75%','%Exp>75%')
+border_color <- setNames(c("black","lightgrey"), unique_colors)
+
+
+df <- read.csv(file.path(dir, 'human_min_log2FC.csv'))
+df$sgRNA <- gsub(".*_","",df$guide)
+df$cutoff <-  -log(df$pvalue) / (1-df$log2FC) 
+rownames(df) <- df$guide
+df$select <- ifelse(df$log2FC < -0.4, '%Exp<75%','%Exp>75%')
+df$significance <- ifelse(df$pvalue < 0.05, 'p<0.05','')
+df$FC <- 2^(df$log2FC)*100
+
+p1 <-ggplot(df, aes(x=gene, y=FC),color=sgRNA) + 
+    geom_point(shape = 21, position=position_jitter(w = 0.1,h = 0),size=3, aes(fill = factor(sgRNA), color=factor(significance),stroke = 1)
+    ) +
+    ylab("%expression to NT") + xlab("") +
+    scale_fill_viridis_d(option = "B") + 
+    #ggsci::scale_fill_jama() +  
+    geom_hline(yintercept = 75, linewidth = 0.8,linetype='dotted')  +
+    scale_color_manual(values=border_color)  + 
+    #ggtitle("Percentage expression compared to NT") +
+    theme(plot.title = element_text(hjust = 0.5)) +
+    ylim(0,100) + 
+    stat_summary(fun.y = mean, fun.ymin = mean, fun.ymax = mean, geom = "crossbar", color = "black", size = 0.3) +
+    theme_linedraw() + 
+    theme_classic2() +
+    Seurat::RotatedAxis() +
+    Seurat::NoLegend()
+
+df <- read.csv(file.path(dir, 'macaque_min_log2FC.csv'))
+df$sgRNA <- gsub(".*_","",df$guide)
+df$cutoff <-  -log(df$pvalue) / (1-df$log2FC) 
+rownames(df) <- df$guide
+df$select <- ifelse(df$log2FC < -0.4, '%Exp<75%','%Exp>75%')
+df$significance <- ifelse(df$pvalue < 0.05, 'p<0.05','')
+df$FC <- 2^(df$log2FC)*100
+
+p2 <- ggplot(df, aes(x=gene, y=FC),color=sgRNA) + 
+    geom_point(shape = 21, position=position_jitter(w = 0.1,h = 0),size=3, aes(fill = factor(sgRNA), color=factor(significance),stroke = 1)
+    ) +
+    ylab("%expression to NT") + xlab("") +
+    scale_fill_viridis_d(option = "B") + 
+    #ggsci::scale_fill_jama() +  
+    geom_hline(yintercept = 75, linewidth = 0.8,linetype='dotted')  +
+    scale_color_manual(values=border_color)  + 
+    theme(plot.title = element_text(hjust = 0.5)) +
+    ylim(0,100) + 
+    stat_summary(fun.y = mean, fun.ymin = mean, fun.ymax = mean, geom = "crossbar", color = "black", size = 0.3) +
+    theme_linedraw() + 
+    theme_classic2() +
+    Seurat::RotatedAxis()
+
+pdf(paste(fig_dir, 'HM2D.KD.pdf',sep=''),width=9, height=2.5)
+#print(ggarrange(p1,p2, ncol = 2, nrow = 1))
+print(p1+p2)
+dev.off()
+
+```
+
+
+```{r HM2D gene level}
+library("ggplot2")
+library(ggpubr)
+
+#set border colors manually
+unique_colors <- c('p<0.05','') 
+unique_colors <- c('%Exp<75%','%Exp>75%')
+border_color <- setNames(c("black","lightgrey"), unique_colors)
+
+dir = '~/Desktop/perturb/HM2D/DEseq2/human_guides/'
+df <- read.csv(file.path(dir, 'min_log2FC.csv'))
+df$cutoff <-  -log(df$pvalue) / (1-df$log2FC) 
+rownames(df) <- df$guide
+df$significance <- ifelse(df$pvalue < 0.05, 'p<0.05','')
+df$select <- ifelse(df$log2FC < -0.4, '%Exp<75%','%Exp>75%')
+df$FC <- 2^(df$log2FC)*100
+
+p1 <-  ggplot(df, aes(x=gene, y=FC)) + 
+    geom_point(shape = 21, position=position_jitter(w = 0.1,h = 0),size=3, aes(fill = factor(significance), color=factor(select),stroke = 1)
+    ) +
+    ylab("%expression to NT") + xlab("") +
+    #scale_fill_viridis_d(option = "B") + 
+    ggsci::scale_fill_jama() +  
+    geom_hline(yintercept = 75, linewidth = 0.8,linetype='dotted')  +
+    scale_color_manual(values=border_color)  + 
+    #ggtitle("Target Gene FC to NT - sgRNA level") +
+    theme(plot.title = element_text(hjust = 0.5)) +
+    ylim(0,100) + 
+    theme_linedraw() + 
+    theme_classic2() +
+    Seurat::RotatedAxis() +
+    Seurat::NoLegend()
+
+
+dir = '~/Desktop/perturb/HM2D/DEseq2/macaque_guides/'
+df <- read.csv(file.path(dir, 'min_log2FC.csv'))
+df$cutoff <-  -log(df$pvalue) / (1-df$log2FC) 
+rownames(df) <- df$guide
+df$significance <- ifelse(df$pvalue < 0.05, 'p<0.05','')
+df$select <- ifelse(df$log2FC < -0.4, '%Exp<75%','%Exp>75%')
+df$FC <- 2^(df$log2FC)*100
+
+p2 <- ggplot(df, aes(x=gene, y=FC)) + 
+    geom_point(shape = 21, position=position_jitter(w = 0.1,h = 0),size=3, aes(fill = factor(significance), color=factor(select),stroke = 1)
+    ) +
+    ylab("%expression to NT") + xlab("") +
+    #scale_fill_viridis_d(option = "B") + 
+    ggsci::scale_fill_jama() +  
+    geom_hline(yintercept = 75, linewidth = 0.8,linetype='dotted')  +
+    scale_color_manual(values=border_color)  + 
+    #ggtitle("FC to NT") +
+    theme(axis.text=element_text(size=5),plot.title = element_text(hjust = 0.5)) +
+    ylim(0,100) + 
+    theme_linedraw() + 
+    theme_classic2() +
+    Seurat::RotatedAxis()
+
+pdf(paste(fig_dir, 'HM2D.KD.genelevel.pdf',sep=''),width=9, height=2.5)
+#print(ggarrange(p1,p2, ncol = 2, nrow = 1))
+print(p1+p2)
+dev.off()
+```
+
+
+```{r barplot guides 2D}
+library(dittoSeq)
+library(wesanderson)
+names(wes_palettes)
+library("viridis") 
+library(RColorBrewer)
+library(zellkonverter)
+library(Seurat)
+
+dir = '~/Desktop/'
+setwd(dir)
+
+sourcefile <- file.path(dir, 'D7-filtered_guides.h5ad') 
+ad <- readH5AD(sourcefile,X_name='counts')
+print(head(ad@assays@data$counts))
+
+# Define 'sgRNA_effective' as sgRNAs that are not non-targeting
+ad$sgRNA_effective <- sapply(ad$sgRNA, function(x) {
+  sgRNAs <- unique(unlist(strsplit(as.character(x), ",")))
+  sgRNAs <- sgRNAs[!grepl("^non-targeting", tolower(sgRNAs))]
+  if (length(sgRNAs) == 0) {
+    return("non-targeting")
+  } else {
+    return(paste(sgRNAs, collapse = ","))
+  }
+})
+
+# Count the number of effective sgRNAs
+ad$num_sgRNA_effective <- sapply(ad$sgRNA_effective, function(x) {
+  length(unique(unlist(strsplit(as.character(x), ","))))
+})
+
+# Filter rows where the number of effective sgRNAs is exactly 1
+ad <- subset(ad,,ad$num_sgRNA_effective == 1)
+ad <- subset(ad,,ad$gene_NKS != 'WT')
+ad <- subset(ad,,ad$gene_NKS != 'nan')
+ad$gene_NKS <- droplevels(ad$gene_NKS)
+ad$sgRNA_effective <- as.factor(ad$sgRNA_effective)
+ad$sgRNA_effective <- droplevels(ad$sgRNA_effective)
+
+#ad$Gene_target <- factor(
+#    ad$Gene_target,
+#    levels = names(sort(table(ad$Gene_target), decreasing = TRUE))
+#)
+
+#ad <- subset(ad, , ad$num_sg_IDs==1)
+#ad$sg_IDs <- droplevels(ad$sg_IDs)
+subset <- subset(ad, , ad$gene_NKS!='non-targeting')
+subset$sgRNA_effective <- gsub(".*_","",subset$sgRNA_effective)
+subset$sgRNA_effective <- factor(subset$sgRNA_effective)
+subset$sgRNA_effective <- droplevels(subset$sgRNA_effective)
+subset$gene_NKS <- factor(subset$gene_NKS)
+subset$gene_NKS <- droplevels(subset$gene_NKS)
+
+p <- dittoBarPlot(subset, retain.factor.levels = TRUE,
+              var='sgRNA_effective', group.by = 'gene_NKS',xlab = '',
+              scale = "percent")+ggsci::scale_fill_jama() 
+#+scale_fill_viridis(discrete = TRUE, option = "B")
+
+fig_dir = '~/Desktop/perturb/HM2D/figures/'
+pdf(paste(fig_dir, '2D.guide.pdf',sep=''),width=9, height=2)
+print(p)
+dev.off()
+
+#histogram to show absolute number of cells per gene/guide
+subset <- subset(ad, , sgRNA_effective != 'non-targeting')
+subset$sgRNA_effective <- droplevels(subset$sgRNA_effective)
+df <- as.data.frame(table(subset$sgRNA_effective))
+p <- gghistogram(df, x = "Freq", fill = "black",xlab = 'number of cells',ylab ='guide count',
+            add = "mean", rug = TRUE,
+            title = 'Distribution of cells per guide')+scale_x_continuous(breaks = get_breaks(n = 10))
+
+fig_dir = '~/Desktop/perturb/HM2D/figures/'
+pdf(paste(fig_dir, '2D.guide.histogram.pdf',sep=''),width=4, height=2)
+print(p)
+dev.off()
+
+#histogram to show absolute number of cells per gene/guide
+subset <- subset(ad, , gene_NKS != 'non-targeting')
+subset$gene_NKS <- droplevels(subset$gene_NKS)
+df <- as.data.frame(table(subset$gene_NKS))
+p <- gghistogram(df, x = "Freq", fill = "black",xlab = 'number of cells',ylab ='gene count',
+                 add = "mean", rug = TRUE, 
+                 title = 'Distribution of cells per gene')+scale_x_continuous(breaks = get_breaks(n = 10))
+
+fig_dir = '~/Desktop/perturb/HM2D/figures/'
+pdf(paste(fig_dir, '2D.gene.histogram.pdf',sep=''),width=4, height=2)
+print(p)
+dev.off()
+
+```
+
+
+
+```{r barplot guides HM2D}
+library(dittoSeq)
+library(wesanderson)
+names(wes_palettes)
+library("viridis") 
+library(RColorBrewer)
+library(zellkonverter)
+library(Seurat)
+
+dir = '~/Desktop/'
+setwd(dir)
+
+sourcefile <- file.path(dir, 'HM2D-filtered_guides.h5ad') 
+ad <- readH5AD(sourcefile,X_name='counts')
+print(head(ad@assays@data$counts))
+
+# Define 'sgRNA_effective' as sgRNAs that are not non-targeting
+ad$sgRNA_effective <- sapply(ad$sgRNA, function(x) {
+  sgRNAs <- unique(unlist(strsplit(as.character(x), ",")))
+  sgRNAs <- sgRNAs[!grepl("^non-targeting", tolower(sgRNAs))]
+  if (length(sgRNAs) == 0) {
+    return("non-targeting")
+  } else {
+    return(paste(sgRNAs, collapse = ","))
+  }
+})
+
+# Count the number of effective sgRNAs
+ad$num_sgRNA_effective <- sapply(ad$sgRNA_effective, function(x) {
+  length(unique(unlist(strsplit(as.character(x), ","))))
+})
+
+# Filter rows where the number of effective sgRNAs is exactly 1
+ad <- subset(ad,,ad$num_sgRNA_effective == 1)
+ad <- subset(ad,,ad$gene_NKS != 'WT')
+ad <- subset(ad,,ad$gene_NKS != 'nan')
+ad$gene_NKS <- droplevels(ad$gene_NKS)
+
+#ad$Gene_target <- factor(
+#    ad$Gene_target,
+#    levels = names(sort(table(ad$Gene_target), decreasing = TRUE))
+#)
+
+#ad <- subset(ad, , ad$num_sg_IDs==1)
+#ad$sg_IDs <- droplevels(ad$sg_IDs)
+subset <- subset(ad, , ad$gene_NKS!='non-targeting')
+subset$sgRNA_effective <- gsub(".*_","",subset$sgRNA_effective)
+subset$sgRNA_effective <- factor(subset$sgRNA_effective)
+subset$sgRNA_effective <- droplevels(subset$sgRNA_effective)
+subset$gene_NKS <- factor(subset$gene_NKS)
+subset$gene_NKS <- droplevels(subset$gene_NKS)
+
+p1 <- dittoBarPlot(subset(subset,,subset$species == 'human'), retain.factor.levels = TRUE,
+              var='sgRNA_effective', group.by = 'gene_NKS',xlab = '',main = '',
+              scale = "percent")+scale_fill_viridis(discrete = TRUE, option = "B") + Seurat::NoLegend()
+
+p2 <- dittoBarPlot(subset(subset,,subset$species == 'macaque'), retain.factor.levels = TRUE,
+              var='sgRNA_effective', group.by = 'gene_NKS',xlab = '',main = '',
+              scale = "percent")+scale_fill_viridis(discrete = TRUE, option = "B")
+
+fig_dir = '~/Desktop/perturb/HM2D/figures/'
+pdf(paste(fig_dir, 'HM2D.guide.pdf',sep=''),width=5, height=2)
+print(p1+p2)
+dev.off()
+
+#histogram to show absolute number of cells per gene/guide
+df <- as.data.frame(table(subset(ad, , species == 'macaque')$gene_NKS))
+gghistogram(df, x = "Freq", fill = "lightgray",bins = 10, 
+   add = "mean", rug = TRUE)
+
+
+```
+
+
+```{r barplot 2D unfiltered}
+library(dittoSeq)
+library(wesanderson)
+names(wes_palettes)
+library("viridis") 
+library(RColorBrewer)
+library(zellkonverter)
+library(Seurat)
+library(cowplot)
+
+dir = '~/Desktop/'
+setwd(dir)
+
+sourcefile <- file.path(dir, 'query_HM2Dall_guides.h5ad') 
+ad <- readH5AD(sourcefile,X_name='counts')
+ad <- subset(ad,,ad$individual %in% c('GW18#140-M','GW16#172-F','GW18#151-F','GW16#130-F'))
+ad$stage <- sub("#.*", "", ad$individual)
+ad$sex <- sub(".*-", "", ad$individual)
+
+ad$individual <- droplevels(ad$individual)
+
+p1 <- dittoBarPlot(subset(ad,,ad$timepoint == 'D0'), retain.factor.levels = TRUE,color.panel = c("#1F77B4FF", "#FF7F0EFF", "#2CA02CFF", "#D62728FF", "#9467BDFF", "#8C564BFF", 
+                                                                  "#E377C2FF", "#BCBD22FF" , "#17BECFFF", "#AEC7E8FF", "#FFBB78FF"),
+                  var='supervised_name', group.by = 'individual',xlab = '',main = 'Diff D0',ylab = "",
+                  scale = "percent") + NoLegend()
+
+p2 <- dittoBarPlot(subset(ad,,ad$timepoint == 'D7'), retain.factor.levels = TRUE,color.panel = c("#1F77B4FF", "#FF7F0EFF", "#2CA02CFF", "#D62728FF", "#9467BDFF", "#8C564BFF", 
+                                                                  "#E377C2FF", "#BCBD22FF" , "#17BECFFF", "#AEC7E8FF", "#FFBB78FF"),
+                  var='supervised_name', group.by = 'individual',xlab = '',main = 'Diff D7',ylab = "",
+                  scale = "percent") + NoLegend()
+
+fig_dir = '~/Desktop/perturb/HM2D/figures/'
+pdf(paste(fig_dir, '2D.barplot.individual.pdf',sep=''),width=3, height=3.5)
+print(ggarrange(p1,p2,ncol=1))
+dev.off()
+
+
+```
+
+
+```{r barplot HM2D unfiltered}
+library(dittoSeq)
+library(wesanderson)
+names(wes_palettes)
+library("viridis") 
+library(RColorBrewer)
+library(zellkonverter)
+library(Seurat)
+library(cowplot)
+
+dir = '~/Desktop/perturb/HM2D/'
+setwd(dir)
+
+sourcefile <- file.path(dir, 'HM2D.h5ad') 
+ad <- readH5AD(sourcefile,X_name='counts')
+ad$stage <- sub("#.*", "", ad$individual)
+ad$sex <- sub(".*-", "", ad$individual)
+ad$supervised_name <- as.factor(ad$supervised_name)
+ad$supervised_name <- droplevels(ad$supervised_name)
+ad$supervised_name <- factor(ad$supervised_name, levels = c('RG_Astro','RG_DIV','IPC_EN','EN_ImN','EN',
+                                                                    'IPC_IN', 'Technical','IN_dLGE_CGE','OPC_Oligo','MG'))
+
+p <- dittoBarPlot(ad, retain.factor.levels = TRUE,
+              var='species', group.by = 'supervised_name',xlab = '',x.labels = NULL,ylab = '',
+              scale = "percent")+ggsci::scale_fill_npg() #+ theme(axis.text.x=element_blank())
+#+scale_fill_viridis(discrete = TRUE, option = "B")
+
+
+subset <- subset(ad,,ad$species == 'human')
+subset$individual <- droplevels(subset$individual)
+p1 <- dittoBarPlot(subset, retain.factor.levels = TRUE,
+              var='stage', group.by = 'supervised_name',xlab = '',
+              scale = "percent")+ggsci::scale_fill_npg() #+ theme(axis.text.x=element_blank())
+
+subset <- subset(ad,,ad$species == 'macaque')
+subset$individual <- droplevels(subset$individual)
+p2 <- dittoBarPlot(subset, retain.factor.levels = TRUE,
+              var='stage', group.by = 'supervised_name',xlab = '',x.labels = NULL,ylab = '',
+              scale = "percent")+ggsci::scale_fill_npg() 
+#+scale_fill_viridis(discrete = TRUE, option = "B")
+
+fig_dir = '~/Desktop/perturb/HM2D/figures/'
+pdf(paste(fig_dir, 'HM2D.barplot.stage.pdf',sep=''),width=5, height=6)
+print(ggpubr::ggarrange(p,p1,p2,ncol=1))
+#plot_grid(plotlist=list(p1,p2), ncol=1 ,label = 'C')
+dev.off()
+
+```

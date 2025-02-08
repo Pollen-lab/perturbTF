@@ -1,0 +1,289 @@
+---
+title: "Cluster-aware compositional analysis between perturbations"
+output: html_notebook
+---
+
+
+```{r}
+library(DCATS)
+library(SeuratData)
+library(tidyverse)
+library(Seurat)
+library(zellkonverter)
+library(SingleCellExperiment)
+```
+
+
+```{r}
+dir = '~/Desktop/'
+setwd(dir)
+
+sourcefile <- file.path(dir, 'D7-filtered_guides.h5ad') 
+sourcefile <- file.path(dir, 'HM2D-filtered_guides.h5ad') 
+
+ad <- readH5AD(sourcefile,X_name='counts')
+print(head(ad@assays@data$counts))
+
+# Define 'sgRNA_effective' as sgRNAs that are not non-targeting
+ad$sgRNA_effective <- sapply(ad$sgRNA, function(x) {
+  sgRNAs <- unique(unlist(strsplit(as.character(x), ",")))
+  sgRNAs <- sgRNAs[!grepl("^non-targeting", tolower(sgRNAs))]
+  if (length(sgRNAs) == 0) {
+    return("non-targeting")
+  } else {
+    return(paste(sgRNAs, collapse = ","))
+  }
+})
+
+# Count the number of effective sgRNAs
+ad$num_sgRNA_effective <- sapply(ad$sgRNA_effective, function(x) {
+  length(unique(unlist(strsplit(as.character(x), ","))))
+})
+
+#subset based on log likelihood guide assignment
+#ad$log <- as.numeric(ad$log)
+#ad <- subset(ad, , ad$log>10)
+
+# Filter rows where the number of effective sgRNAs is exactly 1
+#ad <- subset(ad,,ad$num_sgRNA_effective == 1)
+ad <- subset(ad,,ad$gene_NKS != 'WT')
+ad <- subset(ad,,ad$gene_NKS != 'nan')
+ad$gene_NKS <- droplevels(ad$gene_NKS)
+ad$sgRNA_effective <- as.factor(ad$sgRNA_effective)
+ad$sgRNA_effective <- droplevels(ad$sgRNA_effective)
+ad$perturbation <- ifelse(ad$gene_NKS == 'non-targeting',"NT","Perturbed")
+
+genes = intersect(unique(ad$gene_NKS), rownames(ad))
+
+ad <- subset(ad, ,supervised_name %in% c('EN','EN_ImN','IN_dLGE-CGE','IPC_EN','IPC_IN','OPC-Oligo','RG-Astro','RG_DIV' ))
+ad$supervised_name <- droplevels(ad$supervised_name)
+
+df <- data.frame()
+for (gene in genes){
+  NT <- subset(ad, ,gene_NKS=="non-targeting")
+  Perturbed <- subset(ad, ,gene_NKS==gene)
+  seurat <- cbind(NT, Perturbed)
+  seurat <- as.Seurat(seurat, counts = "counts", data = "counts")
+  seurat$supervised_name <- droplevels(seurat$supervised_name)
+  
+  seurat <- FindNeighbors(seurat, reduction = "X_scANVI", dims = 1:10)
+  seurat$sample <- paste0(seurat$individual,seurat$supervised_name)
+  knn_mat = knn_simMat(seurat@graphs$originalexp_nn, seurat$supervised_name)
+  print(knn_mat)
+
+  seurat$sample <- paste0(seurat$individual,seurat$perturbation)
+  count_mat = table(seurat$sample, seurat$supervised_name)
+  count_mat = count_mat[, rownames(knn_mat)] 
+
+  design_mat = data.frame(condition = c("NT", "Perturbed", "NT", "Perturbed", "NT", "Perturbed", "NT", "Perturbed"))
+  df <- rbind(df, data.frame(gene = gene,
+                             celltype = rownames(dcats_GLM(count_mat, design_mat, similarity_mat = knn_mat)$ceoffs),
+                   ceoffs = as.data.frame(dcats_GLM(count_mat, design_mat, similarity_mat = knn_mat)$ceoffs)$condition,
+                   coeffs_err = as.data.frame(dcats_GLM(count_mat, design_mat, similarity_mat = knn_mat)$coeffs_err)$condition,
+                   LRT_pvals = as.data.frame(dcats_GLM(count_mat, design_mat, similarity_mat = knn_mat)$LRT_pvals)$condition,
+                   LR_vals = as.data.frame(dcats_GLM(count_mat, design_mat, similarity_mat = knn_mat)$LR_vals)$condition,
+                   fdr = as.data.frame(dcats_GLM(count_mat, design_mat, similarity_mat = knn_mat)$fdr)$condition))
+                                   
+}
+dir = '~/Desktop/perturb/HM2D/dcats/'
+rownames(df) <- paste(df$gene, df$celltype, sep='.')
+write.csv(df, file.path(dir,'2D_guides_cleaned_knn.csv'))
+
+
+
+dir = '~/Desktop/perturb/HM2D/TRADE/2D_guides_cleaned'
+logFC <- read.csv(file.path(dir,'logFC-DEG.csv'),header = TRUE,row.names = 1)
+logFC$log.DEGs <- log(logFC$num.DEGs+1)
+logFC$Cell.Type <- as.factor(logFC$Cell.Type)
+#logFC$Cell.Type <- factor(logFC$Cell.Type, levels =  c('RG_cycling','RG','IPC-EN','EN','RG_IN','IN_dLGE-CGE','OPC'))
+logFC$Cell.Type <- factor(logFC$Cell.Type, levels =  c('RG_DIV','RG-Astro','IPC_EN','EN_ImN','EN','IPC_IN','IN_dLGE-CGE','IN_LQ','OPC-Oligo','MG','Technical'))
+logFC$Target.Gene <- as.factor(logFC$Target.Gene)
+logFC$Target.Gene <- factor(logFC$Target.Gene, levels =  c('NR2E1','ARX','SOX2','ZNF219','ASCL1','SOX9','TCF12','CTCF',
+                                                           'JUN','TCF3','PHF21A', 'POU3F1','MEIS2','E2F1','KLF10','FOS',
+                                                           'VEZF1','TFAP2C','TCF7L1','ATF7','KAT7','RFX2','SOX6','ZNF281',
+                                                           'DEAF1','KLF11','SOX5','POU3F2','KLF3','BHLHE22','ZBTB18','POU2F1',
+                                                           'NFIA','NR4A2','NEUROD6','ZNF441','TBR1','EMX1','ZBTB20','MEF2C',
+                                                           'ZNF148','SATB2','NFIB','NEUROD2'
+                                                           ))
+
+logFC <- merge(df, logFC, by='row.names', all=TRUE) 
+logFC <-  logFC %>% rstatix::add_significance(p.col = "LRT_pvals", 
+                              cutpoints = c(0 , 0.05, 0.1, 1),
+                              symbols = c( "<0.05", "<0.1", "ns"))  %>% 
+  filter(Cell.Type %in% c('RG_DIV','RG-Astro','IPC_EN','EN_ImN','EN','IPC_IN','IN_dLGE-CGE','OPC-Oligo'))
+
+
+unique_colors <- list("<0.1",  "ns" ,"<0.05")
+border_color <- setNames(c("darkgrey","white","black"), unique_colors)
+
+fig_dir='~/Desktop/perturb/HM2D/figures/'
+pdf(paste(fig_dir, '2DLogFC-DEG_balloon_pvals.pdf',sep=''),width=13, height=4.5)
+ggpubr::ggballoonplot(
+    logFC, x = "Target.Gene", y = "Cell.Type",
+    size = "log.DEGs", color = 'LRT_pvals.signif',
+    fill = "LogFC",#size = "LogFC_abs",
+    size.range = c(3, 10),
+    #facet.by = c("Coarse.Cell.Type"),
+    legend = 'top',font.legend = c(14, "plain", "black")
+) + scale_fill_gradientn(limits=c(-2,2),oob=scales::squish,
+                         #colours = c('#FD7446', '#FFFFFF', '#709AE1'),
+                         colours = c( '#316dd4', '#FFFFFF', '#f43f03'),
+                         rescaler = ~ scales::rescale_mid(.x, mid = 0))  +  
+    scale_color_manual(values=border_color) +
+    ggtitle('Cell fate and transcriptional responses to perturbation')  + theme(plot.title = element_text(size = 12)) + theme(text=element_text(size=15)) #+ border()
+dev.off()
+
+fig_dir='~/Desktop/perturb/HM2D/figures/'
+pdf(paste(fig_dir, '2DLogFC-DEG_balloon_pvals_coeff_knn.pdf',sep=''),width=13, height=4.5)
+ggpubr::ggballoonplot(
+    logFC, x = "Target.Gene", y = "Cell.Type",
+    size = "log.DEGs", color = 'LRT_pvals.signif',
+    fill = "ceoffs",
+    size.range = c(3, 10),
+    #facet.by = c("Coarse.Cell.Type"),
+    legend = 'top',font.legend = c(14, "plain", "black")
+) + scale_fill_gradientn(limits=c(-1,1),oob=scales::squish,
+                         #colours = c('#FD7446', '#FFFFFF', '#709AE1'),
+                         colours = c( '#316dd4', '#FFFFFF', '#f43f03'),
+                         rescaler = ~ scales::rescale_mid(.x, mid = 0))  +  
+    scale_color_manual(values=border_color) +
+    ggtitle('Cell fate and transcriptional responses to perturbation')  + theme(plot.title = element_text(size = 12)) + theme(text=element_text(size=15)) #+ border()
+dev.off()
+
+```
+
+```{r}
+dir = '~/Desktop/perturb/HM2D/dcats/'
+df <- read.csv(file.path(dir,'2D_guides_cleaned_knn.csv'))
+rownames(df) <- df$X
+
+dir = '~/Desktop/perturb/HM2D/TRADE/2D_guides_cleaned'
+logFC <- read.csv(file.path(dir,'logFC-DEG.csv'),header = TRUE,row.names = 1)
+logFC$log.DEGs <- log(logFC$num.DEGs+1)
+logFC$Cell.Type <- as.factor(logFC$Cell.Type)
+#logFC$Cell.Type <- factor(logFC$Cell.Type, levels =  c('RG_cycling','RG','IPC-EN','EN','RG_IN','IN_dLGE-CGE','OPC'))
+logFC$Cell.Type <- factor(logFC$Cell.Type, levels =  c('RG_DIV','RG-Astro','IPC_EN','EN_ImN','EN','IPC_IN','IN_dLGE-CGE','IN_LQ','OPC-Oligo','MG','Technical'))
+logFC$Target.Gene <- as.factor(logFC$Target.Gene)
+logFC$Target.Gene <- factor(logFC$Target.Gene, levels =  c('NR2E1','ARX','SOX2','ZNF219','ASCL1','SOX9','TCF12','CTCF',
+                                                           'JUN','TCF3','PHF21A', 'POU3F1','MEIS2','E2F1','KLF10','FOS',
+                                                           'VEZF1','TFAP2C','TCF7L1','ATF7','KAT7','RFX2','SOX6','ZNF281',
+                                                           'DEAF1','KLF11','SOX5','POU3F2','KLF3','BHLHE22','ZBTB18','POU2F1',
+                                                           'NFIA','NR4A2','NEUROD6','ZNF441','TBR1','EMX1','ZBTB20','MEF2C',
+                                                           'ZNF148','SATB2','NFIB','NEUROD2'
+))
+
+logFC <- merge(df, logFC, by='row.names', all=TRUE) 
+logFC <-  logFC %>% rstatix::add_significance(p.col = "LRT_pvals", 
+                                              cutpoints = c(0 , 0.05, 0.1, 1),
+                                              symbols = c( "<0.05", "<0.1", "ns"))  %>% 
+    filter(Cell.Type %in% c('RG_DIV','RG-Astro','IPC_EN','EN_ImN','EN','IPC_IN','IN_dLGE-CGE','OPC-Oligo'))
+logFC <- filter(logFC, Target.Gene %in% c('NR2E1','ARX','SOX2','ZNF219','NEUROD2'))
+
+p1 <- ggpubr::ggballoonplot(
+    logFC, x = "Target.Gene", y = "Cell.Type",
+    size = "log.DEGs", color = 'LRT_pvals.signif',
+    fill = "ceoffs",
+    size.range = c(3, 10),
+    #facet.by = c("Coarse.Cell.Type"),
+    legend = 'top',font.legend = c(14, "plain", "black")
+) + scale_fill_gradientn(limits=c(-1,1),oob=scales::squish,
+                         #colours = c('#FD7446', '#FFFFFF', '#709AE1'),
+                         colours = c( '#316dd4', '#FFFFFF', '#f43f03'),
+                         rescaler = ~ scales::rescale_mid(.x, mid = 0))  +  
+    scale_color_manual(values=border_color) +
+    ggtitle('Initial Screen')  + theme(plot.title = element_text(size = 12)) + theme(text=element_text(size=15)) + Seurat::NoLegend()
+
+
+
+dir = '~/Desktop/perturb/HM2D/dcats/'
+df <- read.csv(file.path(dir,'human_guides_knn.csv'))
+rownames(df) <- df$X
+
+dir = '~/Desktop/perturb/HM2D/TRADE/human_guides'
+logFC <- read.csv(file.path(dir,'logFC-DEG.csv'),header = TRUE,row.names = 1)
+logFC$log.DEGs <- log(logFC$num.DEGs+1)
+logFC$Cell.Type <- as.factor(logFC$Cell.Type)
+#logFC$Cell.Type <- factor(logFC$Cell.Type, levels =  c('RG_cycling','RG','IPC-EN','EN','RG_IN','IN_dLGE-CGE','OPC'))
+logFC$Cell.Type <- factor(logFC$Cell.Type, levels =  c('RG_DIV','RG-Astro','IPC_EN','EN_ImN','EN','IPC_IN','IN_dLGE-CGE','IN_LQ','OPC-Oligo','MG','Technical'))
+logFC$Target.Gene <- as.factor(logFC$Target.Gene)
+logFC$Target.Gene <- factor(logFC$Target.Gene, levels =  c('NR2E1','ARX','SOX2','ZNF219','NEUROD2'
+))
+
+logFC <- merge(df, logFC, by='row.names', all=TRUE) 
+logFC <-  logFC %>% rstatix::add_significance(p.col = "LRT_pvals", 
+                                              cutpoints = c(0 , 0.05, 0.1, 1),
+                                              symbols = c( "<0.05", "<0.1", "ns"))  %>% 
+    filter(Cell.Type %in% c('RG_DIV','RG-Astro','IPC_EN','EN_ImN','EN','IPC_IN','IN_dLGE-CGE','OPC-Oligo'))
+
+
+p2 <- ggpubr::ggballoonplot(
+    logFC, x = "Target.Gene", y = "Cell.Type",
+    size = "log.DEGs", color = 'LRT_pvals.signif',
+    fill = "ceoffs",
+    size.range = c(3, 10),
+    #facet.by = c("Coarse.Cell.Type"),
+    legend = 'top',font.legend = c(14, "plain", "black")
+) + scale_fill_gradientn(limits=c(-1,1),oob=scales::squish,
+                         #colours = c('#FD7446', '#FFFFFF', '#709AE1'),
+                         colours = c( '#316dd4', '#FFFFFF', '#f43f03'),
+                         rescaler = ~ scales::rescale_mid(.x, mid = 0))  +  
+    scale_color_manual(values=border_color) +
+    ggtitle('Targeted Screen')  + theme(plot.title = element_text(size = 12)) + theme(text=element_text(size=15)) + Seurat::NoLegend()
+
+
+fig_dir='~/Desktop/perturb/HM2D/figures/'
+pdf(paste(fig_dir, '2DhumanLogFC-DEG_balloon_pvals_coeff_knn.pdf',sep=''),width=4.5, height=3.2)
+print(p1+(p2+theme(axis.text.y=element_blank())))
+dev.off()
+```
+
+
+```{r}
+dir = '~/Desktop/perturb/HM2D/dcats/'
+df <- read.csv(file.path(dir,'2D_guides_cleaned_knn_class.csv'))
+rownames(df) <- df$X
+
+dir = '~/Desktop/perturb/HM2D/TRADE/2D_guides_cleaned_class'
+logFC <- read.csv(file.path(dir,'logFC-DEG.csv'),header = TRUE,row.names = 1)
+logFC$log.DEGs <- log(logFC$num.DEGs+1)
+logFC$Cell.Type <- as.factor(logFC$Cell.Type)
+logFC$Cell.Type <- factor(logFC$Cell.Type, levels =  c('Radial Glia','Excitatory Neurons','Inhibitory Neurons','Glia','Microglia','Technical'))
+logFC$Target.Gene <- as.factor(logFC$Target.Gene)
+logFC$Target.Gene <- factor(logFC$Target.Gene, levels =  c('NR2E1','ARX','SOX2','ZNF219','ASCL1','SOX9','TCF12','CTCF',
+                                                           'JUN','TCF3','PHF21A', 'POU3F1','MEIS2','E2F1','KLF10','FOS',
+                                                           'VEZF1','TFAP2C','TCF7L1','ATF7','KAT7','RFX2','SOX6','ZNF281',
+                                                           'DEAF1','KLF11','SOX5','POU3F2','KLF3','BHLHE22','ZBTB18','POU2F1',
+                                                           'NFIA','NR4A2','NEUROD6','ZNF441','TBR1','EMX1','ZBTB20','MEF2C',
+                                                           'ZNF148','SATB2','NFIB','NEUROD2'
+))
+
+logFC <- merge(df, logFC, by='row.names', all=TRUE) 
+logFC <-  logFC %>% rstatix::add_significance(p.col = "LRT_pvals", 
+                                              cutpoints = c(0 , 0.05, 0.1, 1),
+                                              symbols = c( "<0.05", "<0.1", "ns"))  %>% 
+    filter(Cell.Type %in% c('Radial Glia','Excitatory Neurons','Inhibitory Neurons'))
+#logFC <- filter(logFC, Target.Gene %in% c('NR2E1','ARX','SOX2','ZNF219','NEUROD2'))
+
+p <- ggpubr::ggballoonplot(
+    logFC, x = "Target.Gene", y = "Cell.Type",
+    size = "log.DEGs", color = 'LRT_pvals.signif',
+    fill = "ceoffs",
+    size.range = c(3, 10),
+    #facet.by = c("Coarse.Cell.Type"),
+    legend = 'top',font.legend = c(14, "plain", "black")
+) + scale_fill_gradientn(limits=c(-1,1),oob=scales::squish,
+                         #colours = c('#FD7446', '#FFFFFF', '#709AE1'),
+                         colours = c( '#316dd4', '#FFFFFF', '#f43f03'),
+                         rescaler = ~ scales::rescale_mid(.x, mid = 0))  +  
+    scale_color_manual(values=border_color) +
+    #ggtitle('Cell fate and transcriptional responses to perturbation')  + 
+  theme(plot.title = element_text(size = 12)) + theme(text=element_text(size=15)) + Seurat::NoLegend()
+
+fig_dir='~/Desktop/perturb/HM2D/figures/'
+pdf(paste(fig_dir, '2DLogFC-DEG_balloon_pvals_coeff_knn_class.pdf',sep=''),width=13, height=1.7)
+print(p)
+dev.off()
+
+```
+
+

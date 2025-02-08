@@ -1,0 +1,273 @@
+---
+title: "Plot flowjo output"
+output: html_notebook
+---
+
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(ggprism)
+library(ggbeeswarm)
+library(rstatix)
+
+dir = '~/Desktop/perturb/'
+x = 'Flow-KD.csv'
+data <- read.csv(file.path(dir,x),header = TRUE)
+data <- as_tibble(data)
+head(data)
+
+#add one column for all NT guides
+data$sgRNA <- data$Guide
+#rename guides
+data <-data %>% mutate(sgRNA = replace(sgRNA, Guide %in% c('NT_g1','NT_g2'), "NT")) 
+
+data$Target.Gene <- as.factor(data$Target.Gene)
+data$Target.Gene <- factor(data$Target.Gene, levels = c('NT','NR2E1','ARX','SOX2','ZNF219','NEUROD2'))
+
+```
+
+
+
+```{r p value D7}
+# Filtering by D7
+d7 <- filter(data, Diff == "D7")
+compare_means(KI67 ~ sgRNA, data = d7, paired = FALSE,ref.group = 'NT',method = "t.test")
+compare_means(EOMES ~ sgRNA, data = d7, paired = FALSE,ref.group = 'NT',method = "t.test")
+compare_means(NEUROD2 ~ sgRNA, data = d7, paired = FALSE,ref.group = 'NT',method = "t.test")
+compare_means(DLX2 ~ sgRNA, data = d7, paired = FALSE,ref.group = 'NT',method = "t.test")
+
+
+each.vs.basemean <- list()
+## p-value (text only) comparing to the null
+each.vs.basemean[['KI67']] <- tibble::tribble(
+  ~group1, ~group2, ~p.adj, ~y.position,
+  "all",   "ARX_g2",   "***", 1.2,
+  "all",   "ARX_g1",     "**",   1.2,
+  "all",   "NR2E1_g1",     "***", 1.2,
+  #"all",   "NR2E1_g3",     "ns", 1.2,
+  "all",   "ZNF219_g3",     "****", 1.2,
+  #"all",   "ZNF219_g2",     "ns", 1.2,
+  #"all",   "SOX2_g1",     "ns", 1.4,
+  #"all",   "SOX2_g3",     "ns", 1.4,
+)
+each.vs.basemean[['EOMES']] <- tibble::tribble(
+  ~group1, ~group2, ~p.adj, ~y.position,
+  #"all",   "ARX_g2",   "ns", 1.9,
+  #"all",   "ARX_g1",     "ns",   1.9,
+  #"all",   "NR2E1_g1",     "ns", 1.9,
+  "all",   "NR2E1_g3",     "***", 1.5,
+  #"all",   "ZNF219_g3",     "ns", 1.9,
+  #"all",   "ZNF219_g2",     "ns", 1.9,
+  "all",   "SOX2_g1",     "**", 1.5,
+  "all",   "SOX2_g3",     "***", 1.5,
+)
+each.vs.basemean[['NEUROD2']] <- tibble::tribble(
+  ~group1, ~group2, ~p.adj, ~y.position,
+  #"all",   "ARX_g2",   "ns", 1.9,
+  #"all",   "ARX_g1",     "ns",   1.9,
+  #"all",   "NR2E1_g1",     "ns", 1.9,
+  "all",   "NR2E1_g3",     "**", 1.9,
+  #"all",   "ZNF219_g3",     "ns", 1.9,
+  "all",   "ZNF219_g2",     "*", 1.9,
+  "all",   "SOX2_g1",     "**", 1.9,
+  #"all",   "SOX2_g3",     "ns", 1.9,
+)
+each.vs.basemean[['DLX2']] <- tibble::tribble(
+  ~group1, ~group2, ~p.adj, ~y.position,
+  "all",   "ARX_g2",   "", 2.5,
+  #"all",   "ARX_g1",     "ns",   2.5,
+  #"all",   "NR2E1_g1",     "ns", 2.5,
+  #"all",   "NR2E1_g3",     "ns", 2.5,
+  #"all",   "ZNF219_g3",     "ns", 2.5,
+  #"all",   "ZNF219_g2",     "ns", 2.5,
+)
+
+```
+
+```{r p value D4}
+# Filtering by D4
+d4 <- filter(data, Diff == "D4")
+compare_means(KI67 ~ sgRNA, data = d4, paired = FALSE,ref.group = 'NT',method = "t.test")
+compare_means(EOMES ~ sgRNA, data = d4, paired = FALSE,ref.group = 'NT',method = "t.test")
+compare_means(NEUROD2 ~ sgRNA, data = d4, paired = FALSE,ref.group = 'NT',method = "t.test")
+compare_means(DLX2 ~ sgRNA, data = d4, paired = FALSE,ref.group = 'NT',method = "t.test")
+
+
+each.vs.basemean <- list()
+## p-value (text only) comparing to the null
+each.vs.basemean[['KI67']] <- tibble::tribble(
+  ~group1, ~group2, ~p.adj, ~y.position,
+  "all",   "ARX_g1",     "*",   1.2,
+  "all",   "ZNF219_g3",     "*", 1.2,
+)
+each.vs.basemean[['EOMES']] <- tibble::tribble(
+  ~group1, ~group2, ~p.adj, ~y.position,
+  "all",   "NR2E1_g1",     "**", 1.2,
+  "all",   "NR2E1_g3",     "**", 1.2,
+)
+each.vs.basemean[['NEUROD2']] <- tibble::tribble(
+  ~group1, ~group2, ~p.adj, ~y.position,
+  "all",   "NR2E1_g3",     "*", 1.2,
+)
+each.vs.basemean[['DLX2']] <- tibble::tribble(
+  ~group1, ~group2, ~p.adj, ~y.position,
+  "all",   "ZNF219_g3",     "*", 1.2
+)
+
+
+```
+
+```{r p value D2}
+# Filtering by D2
+d2 <- filter(data, Diff == "D2")
+compare_means(KI67 ~ sgRNA, data = d2, paired = FALSE,ref.group = 'NT',method = "t.test")
+compare_means(EOMES ~ sgRNA, data = d2, paired = FALSE,ref.group = 'NT',method = "t.test")
+compare_means(NEUROD2 ~ sgRNA, data = d2, paired = FALSE,ref.group = 'NT',method = "t.test")
+compare_means(DLX2 ~ sgRNA, data = d2, paired = FALSE,ref.group = 'NT',method = "t.test")
+compare_means(SOX2 ~ sgRNA, data = d2, paired = FALSE,ref.group = 'NT',method = "t.test")
+
+each.vs.basemean <- list()
+## p-value (text only) comparing to the null
+each.vs.basemean[['KI67']] <- tibble::tribble(
+  ~group1, ~group2, ~p.adj, ~y.position,
+  "all",   "ARX_g1",     "",   1.2
+)
+each.vs.basemean[['EOMES']] <- tibble::tribble(
+  ~group1, ~group2, ~p.adj, ~y.position,
+  "all",   "NR2E1_g1",     "", 1.2
+)
+each.vs.basemean[['NEUROD2']] <- tibble::tribble(
+  ~group1, ~group2, ~p.adj, ~y.position,
+  "all",   "ZNF219_g2",     "*", 2.5,
+)
+each.vs.basemean[['DLX2']] <- tibble::tribble(
+  ~group1, ~group2, ~p.adj, ~y.position,
+  "all",   "ZNF219_g3",     "", 1.2
+)
+each.vs.basemean[['SOX2']] <- tibble::tribble(
+  ~group1, ~group2, ~p.adj, ~y.position,
+  "all",   "SOX2_g1",     "**", 1.1,
+  "all",   "SOX2_g3",     "**", 1.1,
+)
+
+```
+
+
+
+```{r barplot - flow KD}
+library(dplyr)
+library(ggplot2)
+library(ggprism)
+library(ggbeeswarm)
+library(rstatix)
+library(ggpubr)
+
+
+dir = '~/Desktop/perturb/'
+x = 'Flow-KD.csv'
+data <- read.csv(file.path(dir,x),header = TRUE)
+data <- as_tibble(data)
+data$Target.Gene <- as.factor(data$Target.Gene)
+data$Target.Gene <- factor(data$Target.Gene, levels = c('NT','NR2E1','ARX','SOX2','ZNF219','NEUROD2'))
+
+#D2
+# Filtering by Diff condition
+d2 <- filter(data, Diff == "D2")
+d2$Guide <- as.factor(d2$Guide)
+d2 <- filter(d2, Guide %in% c("NT_g1", "NT_g2","NR2E1_g1","NR2E1_g3","ARX_g1",
+                                       "ARX_g2","SOX2_g1","SOX2_g3","ZNF219_g2","ZNF219_g3"))
+d2$Guide <- factor(d2$Guide , levels=c("NT_g1", "NT_g2","NR2E1_g1","NR2E1_g3","ARX_g1",
+                                       "ARX_g2","SOX2_g1","SOX2_g3","ZNF219_g2","ZNF219_g3"))
+d2$Target.Gene <- as.factor(d2$Target.Gene)
+d2$Target.Gene <- factor(d2$Target.Gene, c("NT","NR2E1", "ARX", 'SOX2','ZNF219'))
+
+
+myplots <- list()
+for (gene in c('KI67','EOMES','NEUROD2','SOX2','DLX2')){
+  myplots[[gene]] <- ggboxplot(d2, y = gene, x = "Guide",xlab='',
+          fill = "Target.Gene",palette = pal_npg("nrc", alpha = 0.7)(10),
+          add = "dotplot", add.params = list(shape = 21)) + rremove("legend") + rotate_x_text(45) + 
+  #stat_compare_means(comparisons = my_comparisons,label = "p.signif", hide.ns = TRUE, method = "t.test") +
+  geom_hline(yintercept = 1, linetype = "dashed", color = "darkgrey") + add_pvalue(
+        each.vs.basemean[[gene]], label.size = 5,
+        fontface = "bold") +  theme(axis.text.x=element_blank()) + 
+  theme(legend.position="none") 
+}
+
+fig_dir='~/Desktop/perturb/figures/'
+pdf(paste(fig_dir, 'Flow-D2.pdf',sep=''),width=4, height=6)
+print(ggarrange(plotlist = myplots, ncol =1))
+dev.off()
+
+
+#D4
+# Filtering by Diff condition
+d4 <- filter(data, Diff == "D4")
+d4$Guide <- as.factor(d4$Guide)
+d4$Guide <- factor(d4$Guide , levels=c("NT_g1", "NT_g2","NR2E1_g1","NR2E1_g3","ARX_g1",
+                                       "ARX_g2","ZNF219_g2","ZNF219_g3"))
+
+
+myplots <- list()
+for (gene in c('KI67','EOMES','NEUROD2','SOX2','DLX2')){
+  myplots[[gene]] <- ggboxplot(d4, y = gene, x = "Guide",xlab='',
+          fill = "Target.Gene",palette = c("#E64B35B2", "#4DBBD5B2", "#00A087B2", "#F39B7FB2" ),
+          add = "dotplot", add.params = list(shape = 21)) + rremove("legend") + rotate_x_text(45) + 
+  #stat_compare_means(comparisons = my_comparisons,label = "p.signif", hide.ns = TRUE, method = "t.test") +
+  geom_hline(yintercept = 1, linetype = "dashed", color = "darkgrey") + add_pvalue(
+        each.vs.basemean[[gene]], label.size = 5,
+        fontface = "bold") +  theme(axis.text.x=element_blank()) + 
+  theme(legend.position="none") 
+}
+
+fig_dir='~/Desktop/perturb/figures/'
+pdf(paste(fig_dir, 'Flow-D4.pdf',sep=''),width=3, height=6)
+print(ggarrange(plotlist = myplots, ncol =1))
+dev.off()
+
+#get_legend(ggboxplot(d4, y = gene, x = "Guide",
+#          color = "Target.Gene", palette = "jco",
+#         add = "jitter"))
+
+#D7
+# Filtering by Diff condition
+d7 <- filter(data, Diff == "D7")
+d7$Guide <- as.factor(d7$Guide)
+d7$Guide <- factor(d7$Guide , levels=c("NT_g1", "NT_g2","NR2E1_g1","NR2E1_g3","ARX_g1",
+                                       "ARX_g2","SOX2_g1","SOX2_g3","ZNF219_g2","ZNF219_g3"))
+d7$Target.Gene <- as.factor(d7$Target.Gene)
+d7$Target.Gene <- factor(d7$Target.Gene, c("NT","NR2E1", "ARX", 'SOX2','ZNF219','NEUROD2'))
+
+myplots <- list()
+for (gene in c('KI67','EOMES','NEUROD2','SOX2','DLX2')){
+    myplots[[gene]] <- ggboxplot(d7, y = gene, x = "Guide",xlab='',
+                                 fill = "Target.Gene",palette = pal_npg("nrc", alpha = 0.7)(10),
+                                 add = "dotplot", add.params = list(shape = 21)) + rremove("legend") + rotate_x_text(45) + 
+        #stat_compare_means(comparisons = my_comparisons,label = "p.signif", hide.ns = TRUE, method = "t.test") +
+        geom_hline(yintercept = 1, linetype = "dashed", color = "darkgrey") + add_pvalue(
+            each.vs.basemean[[gene]], label.size = 5,
+            fontface = "bold") +  theme(axis.text.x=element_blank()) + 
+        theme(legend.position="none") 
+}
+
+fig_dir='~/Desktop/perturb/figures/'
+pdf(paste(fig_dir, 'Flow-D7.pdf',sep=''),width=4, height=6)
+print(ggarrange(plotlist = myplots, ncol =1))
+dev.off()
+
+fig_dir='~/Desktop/perturb/figures/'
+pdf(paste(fig_dir, 'Flow-SOX2KD.pdf',sep=''),width=4, height=2)
+print(cowplot::plot_grid(p2, p7, labels = c('D2', 'D7'), label_size = 12))
+dev.off()
+
+```
+
+
+# Session Info
+<details>
+```{r session, echo=FALSE}
+sessionInfo()
+```
+</details>
+

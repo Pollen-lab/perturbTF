@@ -1,0 +1,76 @@
+---
+title: "DEG analysis using TRADE"
+output: html_notebook
+---
+
+
+```{r}
+library(TRADE)
+dir <- '/wynton/group/pollen/jding/brainchromatin/HM2D/DEseq2/2D_guides_cleaned'
+out_dir <- '/wynton/group/pollen/jding/brainchromatin/HM2D/TRADE/2D_guides_cleaned'
+dir.create(out_dir, showWarnings = FALSE)
+
+library(TRADE)
+dir <- '/wynton/group/pollen/jding/brainchromatin/HM2D/DEseq2/macaque_guides'
+out_dir <- '/wynton/group/pollen/jding/brainchromatin/HM2D/TRADE/macaque_guides'
+dir.create(out_dir, showWarnings = FALSE)
+
+library(TRADE)
+dir <- '/wynton/group/pollen/jding/brainchromatin/HM2D/DEseq2/human_guides'
+out_dir <- '/wynton/group/pollen/jding/brainchromatin/HM2D/TRADE/human_guides'
+dir.create(out_dir, showWarnings = FALSE)
+
+names = gsub('.csv','',list.files(dir, pattern = 'csv'))
+
+tradeDEG <- data.frame(names)
+rownames(tradeDEG) <- tradeDEG$names
+tradeDEG$gene = gsub("\\..*", "",tradeDEG$names)
+tradeDEG$celltype = gsub("^[^.]*.([^.]*).*", "\\1",tradeDEG$names)
+#rownames(tradeDEG) <- paste(tradeDEG$gene,tradeDEG$celltype, sep='.')
+#colnames(tradeDEG) <- c("celltype", "gene")
+head(tradeDEG)
+
+num.tradeDEGs <- c()
+for (x in rownames(tradeDEG)){
+  gene = gsub("\\..*", "", x)
+  celltype = gsub("^[^.]*.([^.]*).*", "\\1",x)
+  print(gene)
+  print(celltype)
+  if (file.exists(file.path(dir,paste(gene, celltype,'csv',sep='.')))){
+    results <- read.csv(file.path(dir,paste(gene, celltype,'csv',sep='.')),header = TRUE,row.names = 1)
+    TRADE_output <- TRADE(mode = "univariate", results1 = results)
+    if (!is.null(rownames(TRADE_output$significant_genes_FDR$significant_gene_results_FDR))) { 
+     df <- TRADE_output$significant_genes_FDR$significant_gene_results_FDR
+     df$genes <- rownames(TRADE_output$significant_genes_FDR$significant_gene_results_FDR)
+     write.csv(df,file.path(out_dir,paste(gene, celltype,'FDR.csv',sep='.')), row.names = FALSE)
+     num.tradeDEGs <- c(num.tradeDEGs, dim(TRADE_output$significant_genes_FDR$significant_gene_results_FDR)[1])
+    } else {
+      num.tradeDEGs <- 0
+    }
+    if (!is.null(rownames(TRADE_output$significant_genes_Bonferroni$significant_gene_results_Bonferroni))) { 
+     df <- TRADE_output$significant_genes_Bonferroni$significant_gene_results_Bonferroni
+     df$genes <- rownames(TRADE_output$significant_genes_Bonferroni$significant_gene_results_Bonferroni)
+     write.csv(df,file.path(out_dir,paste(gene, celltype,'Bonferroni.csv',sep='.')), row.names = FALSE)
+    } 
+  } else {
+    num.tradeDEGs <- c(num.tradeDEGs, 0)
+  }
+}
+tradeDEG$num.DEG <- num.tradeDEGs
+
+
+for (celltype in levels(ad$supervised_name)){
+  for (gene in intersect(unique(ad$Gene_target),rownames(ad))){
+    results <- read.csv(file.path(dir,paste(gene, celltype,'csv',sep='.')),header = TRUE,row.names = 1)
+    TRADE_output <- TRADE(mode = "univariate", results1 = results)
+    write.csv(TRADE_output$significant_genes_FDR$significant_gene_results_FDR,file.path(out_dir,paste(gene, celltype,'FDR.csv',sep='.')), row.names = FALSE)
+    write.csv(TRADE_output$significant_genes_Bonferroni$significant_gene_results_Bonferroni,file.path(out_dir,paste(gene, celltype,'Bonferroni.csv',sep='.')), row.names = FALSE)
+    up <- length(rownames(filter(TRADE_output$significant_genes_FDR$significant_gene_results_FDR,log2FoldChange > 0)))
+    tradeDEG[[paste(gene,'up',sep='_')]] <- unique(up$ID)
+    down <- length(rownames(filter(TRADE_output$significant_genes_FDR$significant_gene_results_FDR,log2FoldChange < 0)))
+    tradeDEG[[paste(gene,'down',sep='_')]] <- unique(down$ID)
+  }
+
+#head(TRADE_output$significant_genes_Bonferroni$significant_gene_results_Bonferroni)
+
+```

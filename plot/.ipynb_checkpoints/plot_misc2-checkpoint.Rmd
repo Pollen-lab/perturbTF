@@ -1,0 +1,1307 @@
+---
+title: "Plotting for compositions, DEGs and clonal clusters"
+output: html_notebook
+---
+
+
+
+```{r }
+library(tidyr)
+
+dir = '~/Desktop/perturb/HM2D/'
+fig_dir='~/Desktop/perturb/HM2D/figures/'
+
+distance <- read.csv(file.path(dir,'euclidean.guides.csv'),header = TRUE,row.names = 1) %>% drop_na()
+
+p <- ggpaired(distance, cond1 = "intragene_guides", cond2 = "intergene_guides",ylab = 'average distance', line.size = 0.0, line.color = NULL,
+    fill = "condition", palette = "jco") + stat_compare_means( method = "t.test",  paired = TRUE)+Seurat::NoLegend()
+
+pdf(paste(fig_dir, '2D.guide.distance.pdf',sep=''),width=3.3, height=4)
+print(p)
+dev.off()
+```
+
+
+```{r}
+#distances to NT
+dir = '~/Desktop/perturb/HM2D/'
+fig_dir='~/Desktop/perturb/HM2D/figures/'
+
+distance <- read.csv(file.path(dir,'distance.2D.csv'),header = TRUE,row.names = 1) 
+distance$gene <- sub(" KD.*", "", rownames(distance))
+distance <- distance %>% filter(gene != 'non-targeting')
+
+genestolabel <- c('ARX','NR2E1','ZNF219','SOX2','NEUROD2','SOX9','NFIB','PHF21A','ZNF148')
+distance$highlight <- ifelse(distance$gene %in% genestolabel, "yes","no")
+
+distance <- distance[order(distance$euclidean),]
+distance$Ranking <- c(1:dim(distance)[1])
+p1 <- ggscatter(distance, x = "Ranking", y = "euclidean", ylab='Euclidedan distance to NT',
+   color = "highlight", shape = 19, size = 2, # Points color, shape and size
+   palette = c("black", "#FC4E07"),
+   font.label = c(8, "plain","#FC4E07") ,
+   label = 'gene',parse=TRUE,
+   label.select= c(tail(distance$gene,n=5), genestolabel), 
+   repel = TRUE, label.rectangle = TRUE) + theme(plot.title = element_text(size = 10)) + theme(text=element_text(size=8))
+ 
+distance <- distance[order(distance$edistance),]
+distance$Ranking <- c(1:dim(distance)[1])
+p2 <- ggscatter(distance, x = "Ranking", y = "edistance", ylab='Edistance distance to NT',
+   color = "highlight", shape = 19, size = 2, # Points color, shape and size
+   palette = c("black", "#FC4E07"),
+   font.label = c(8, "plain","#FC4E07") ,
+   label = 'gene',parse=TRUE,
+   label.select= c(tail(distance$gene,n=5), genestolabel), 
+   repel = TRUE, label.rectangle = TRUE) + theme(plot.title = element_text(size = 10)) + theme(text=element_text(size=8))
+
+
+dir = '~/Desktop/perturb/HM2D/TRADE/2D_guides_cleaned/'
+logFC <- read.csv(file.path(dir,'logFC-DEG.csv'),header = TRUE,row.names = 1)
+logFC$log.DEGs <- log(logFC$num.DEGs+1)
+logFC$Cell.Type <- as.factor(logFC$Cell.Type)
+logFC$Cell.Type <- factor(logFC$Cell.Type, levels =  c('RG_DIV','RG-Astro','IPC_EN','EN_ImN','EN','IPC_IN','IN_dLGE-CGE','Technical','OPC-Oligo','MG'))
+
+df <- data.frame(Target.Gene = unique(logFC$Target.Gene))
+df$maxLogFC <- lapply(unique(logFC$Target.Gene), function(i){
+    max(filter(logFC,Target.Gene == i )$LogFC_abs) 
+})
+df$maxLogFC <- unlist(df$maxLogFC)
+df <- df[order(df$maxLogFC),]
+df$Ranking <- c(1:dim(df)[1])
+df$highlight <- ifelse(df$Target.Gene %in% genestolabel, "yes","no")
+
+p3 <- ggscatter(df, x = "Ranking", y = "maxLogFC",ylab='max|LogFC|',
+   color = "highlight", shape = 19, size = 2, # Points color, shape and size
+   palette = c("black", "#FC4E07"),
+   font.label = c(8, "plain","#FC4E07") ,
+   label = 'Target.Gene',parse=TRUE,
+   label.select= c(tail(distance$gene,n=5), genestolabel), 
+   repel = TRUE, label.rectangle = TRUE) + theme(plot.title = element_text(size = 10)) + theme(text=element_text(size=8))
+
+pdf(paste(fig_dir, 'scatter.distance.pdf',sep=''),width=9, height=3)
+print(ggarrange(p1+NoLegend(),p2+NoLegend(),p3+NoLegend(), ncol=3))
+dev.off()
+
+```
+
+
+```{r balloon LogFC to DEG}
+#LogFC to DEG
+
+dir = '~/Desktop/perturb'
+dir = '~/Desktop/perturb/HM2D'
+dir = '~/Desktop/perturb/HM2D/TRADE/macaque'
+dir = '~/Desktop/perturb/HM2D/TRADE/2D_guides_cleaned'
+dir = '~/Desktop/perturb/HM2D/TRADE/macaque_guides'
+dir = '~/Desktop/perturb/HM2D/TRADE/human_guides'
+fig_dir='~/Desktop/perturb/HM2D/figures/'
+
+logFC <- read.csv(file.path(dir,'logFC-DEG.csv'),header = TRUE,row.names = 1)
+logFC$log.DEGs <- log(logFC$num.DEGs+1)
+logFC$Cell.Type <- as.factor(logFC$Cell.Type)
+#logFC$Cell.Type <- factor(logFC$Cell.Type, levels =  c('RG_cycling','RG','IPC-EN','EN','RG_IN','IN_dLGE-CGE','OPC'))
+logFC$Cell.Type <- factor(logFC$Cell.Type, levels =  c('RG_DIV','RG-Astro','IPC_EN','EN_ImN','EN','IPC_IN','IN_dLGE-CGE','Technical','OPC-Oligo','MG'))
+logFC <- filter(logFC, Cell.Type %in% c('RG_DIV','RG-Astro','IPC_EN','EN_ImN','EN','IPC_IN','IN_dLGE-CGE','OPC-Oligo'))
+
+#for 2D
+logFC$Target.Gene <- as.factor(logFC$Target.Gene)
+logFC$Target.Gene <- factor(logFC$Target.Gene, levels =  c('NR2E1','ARX','SOX2','ZNF219','ASCL1','SOX9','TCF12','CTCF',
+                                                           'JUN','TCF3','PHF21A', 'POU3F1','MEIS2','E2F1','KLF10','FOS',
+                                                           'VEZF1','TFAP2C','TCF7L1','ATF7','KAT7','RFX2','SOX6','ZNF281',
+                                                           'DEAF1','KLF11','SOX5','POU3F2','KLF3','BHLHE22','ZBTB18','POU2F1',
+                                                           'NFIA','NR4A2','NEUROD6','ZNF441','TBR1','EMX1','ZBTB20','MEF2C',
+                                                           'ZNF148','SATB2','NFIB','NEUROD2'
+                                                           ))
+
+#for HM2D-macaque/human
+logFC$Target.Gene <- as.factor(logFC$Target.Gene)
+logFC$Target.Gene <- factor(logFC$Target.Gene, levels =  c('NR2E1','ARX','SOX2','ZNF219','NEUROD2'))
+#logFC <- filter(logFC, logFC$Target.Gene %in% c('ARX','SOX2','NEUROD2','NR2E1','ZNF219'))
+
+
+
+pdf(paste(fig_dir, '2DLogFC-DEG_balloon.pdf',sep=''),width=14, height=5)
+ggpubr::ggballoonplot(
+ logFC, x = "Target.Gene", y = "Cell.Type",
+ size = "log.DEGs", 
+ fill = "LogFC",#size = "LogFC_abs",
+ size.range = c(3, 10),
+ #facet.by = c("Coarse.Cell.Type"),
+ legend = 'top',font.legend = c(14, "plain", "black")
+) + scale_fill_gradientn(limits=c(-2,2),oob=scales::squish,
+    #colours = c('#FD7446', '#FFFFFF', '#709AE1'),
+    colours = c( '#316dd4', '#FFFFFF', '#f43f03'),
+    rescaler = ~ scales::rescale_mid(.x, mid = 0))  + 
+    ggtitle('Cell fate and transcriptional responses to perturbation')  + theme(plot.title = element_text(size = 12)) + theme(text=element_text(size=15)) #+ border()
+dev.off()
+
+pdf(paste(fig_dir, 'macaqueLogFC-DEG_balloon.pdf',sep=''),width=3, height=3.5)
+ggpubr::ggballoonplot(
+ logFC, x = "Target.Gene", y = "Cell.Type",
+ size = "log.DEGs", 
+ size.range = c(3, 10),
+ fill = "LogFC",#size = "LogFC_abs",
+ #facet.by = c("Coarse.Cell.Type"),
+ legend = 'top',font.legend = c(14, "plain", "black")
+) + scale_fill_gradientn(limits=c(-2,2),oob=scales::squish,
+    #colours = c('#FD7446', '#FFFFFF', '#709AE1'),
+    colours = c( '#316dd4', '#FFFFFF', '#f43f03'),
+    rescaler = ~ scales::rescale_mid(.x, mid = 0))  + 
+    #ggtitle('Cell fate and transcriptional responses to perturbation')  + 
+  theme(plot.title = element_text(size = 12)) + theme(text=element_text(size=15)) + Seurat::NoLegend()
+dev.off()
+
+
+# Set directory and load data
+dir <- '~/Desktop/perturb/HM2D/'
+df <- read.csv(file.path(dir, 'min_log2FC.csv'))
+df <- df %>%
+  mutate(
+    sgRNA = sub(".*_", "", guide), # Replace first instance of pattern only
+    significance = ifelse(pvalue < 0.05, 'p<0.05', 'n.s.')
+  ) %>%
+  filter(log2FC < -0.4) %>%
+  dplyr::count(gene) 
+
+df$gene <- as.factor(df$gene)
+df$gene <- factor(df$gene, levels =  c('NR2E1','ARX','SOX2','ZNF219','ASCL1','SOX9','TCF12','CTCF',
+                                                           'JUN','TCF3','PHF21A', 'POU3F1','MEIS2','E2F1','KLF10','FOS',
+                                                           'VEZF1','TFAP2C','TCF7L1','ATF7','KAT7','RFX2','SOX6','ZNF281',
+                                                           'DEAF1','KLF11','SOX5','POU3F2','KLF3','BHLHE22','ZBTB18','POU2F1',
+                                                           'NFIA','NR4A2','NEUROD6','ZNF441','TBR1','EMX1','ZBTB20','MEF2C',
+                                                           'ZNF148','SATB2','NFIB','NEUROD2'
+                                                           ))
+
+df$y <- '#guides'
+
+p0 <- ggpubr::ggballoonplot(
+    df, x = "gene", y = 'y',shape=22,
+    size = 3, 
+    fill = "n",
+    legend = 'top',font.legend = c(14, "plain", "black")
+) + gradient_fill(c( "lightgrey", "black")) + theme(text=element_text(size=15)) +  theme(axis.text.x=element_blank()) #+ Seurat::NoLegend()
+
+pdf(paste(fig_dir, '2D-numguides_balloon.pdf',sep=''),width=13, height=1.3)
+print(p0)
+dev.off()
+
+```
+
+
+
+```{r accumulated DEG-logFC}
+#accumulated logFC
+dir = '~/Desktop/perturb/HM2D/TRADE/2D_guides_cleaned/'
+fig_dir='~/Desktop/perturb/HM2D/figures/'
+
+logFC <- read.csv(file.path(dir,'logFC-DEG.csv'),header = TRUE,row.names = 1)
+logFC$log.DEGs <- log(logFC$num.DEGs+1)
+logFC$Cell.Type <- as.factor(logFC$Cell.Type)
+logFC$Cell.Type <- factor(logFC$Cell.Type, levels =  c('RG_DIV','RG-Astro','IPC_EN','EN_ImN','EN','IPC_IN','IN_dLGE-CGE','Technical','OPC-Oligo','MG','Technical'))
+
+dir = '~/Desktop/perturb/HM2D/dcats/'
+df <- read.csv(file.path(dir,'2D_guides_cleaned_knn.csv'),header=TRUE)
+rownames(df) <- df$X
+
+logFC <- merge(df, logFC, by='row.names', all=TRUE) 
+logFC <-  logFC %>% rstatix::add_significance(p.col = "LRT_pvals", 
+                              cutpoints = c(0 , 0.05, 0.1, 1),
+                              symbols = c( "<0.05", "<0.1", "ns"))  %>% 
+  filter(Cell.Type %in% c('RG_DIV','RG-Astro','IPC_EN','EN_ImN','EN','IPC_IN','IN_dLGE-CGE'))
+
+
+df <- data.frame(Target.Gene = unique(logFC$Target.Gene))
+df$sumLogFC <- lapply(unique(logFC$Target.Gene), function(i){
+    sum(filter(logFC,Target.Gene == i )$LogFC_abs) 
+})
+df$sumLogFC <- unlist(df$sumLogFC)
+df <- df[order(df$sumLogFC),]
+df$Ranking <- c(1:dim(df)[1])
+p1 <- ggscatter(df, x = "Ranking", y = "sumLogFC",ylab='Sum LogFC',
+   color = "black", shape = 21, size = 2, # Points color, shape and size
+   font.label = c(8, "plain","#FC4E07") ,
+   label = 'Target.Gene',parse=TRUE,
+   label.select= c('ARX','NR2E1','ZNF219','SOX2','NEUROD2'), 
+   #label.select= tail(df$Target.Gene,n=5), #label top2 TFs in each cell type
+   repel = TRUE, label.rectangle = TRUE) + 
+    ggtitle('Accumulated LogFC in all cell types')  + theme(plot.title = element_text(size = 10)) + theme(text=element_text(size=8))
+ 
+pdf(paste(fig_dir, 'sumLogFC.pdf',sep=''),width=3, height=3)
+print(p)
+dev.off()
+
+#accumulated DEGs
+
+df <- data.frame(Target.Gene = unique(logFC$Target.Gene))
+df$sumDEGs <- lapply(unique(logFC$Target.Gene), function(i){
+    sum(filter(logFC,Target.Gene == i )$num.DEGs) 
+})
+df$sumDEGs <- unlist(df$sumDEGs)
+df <- df[order(df$sumDEGs),]
+df$Ranking <- c(1:dim(df)[1])
+p2 <- ggscatter(df, x = "Ranking", y = "sumDEGs",ylab='Sum DEGs',
+   color = "black", shape = 21, size = 2, # Points color, shape and size
+   font.label = c(8, "plain","#FC4E07") ,
+   label = 'Target.Gene',parse=TRUE,
+   label.select= c('ARX','NR2E1','ZNF219','SOX2','NEUROD2'), 
+   #label.select= tail(df$Target.Gene,n=5), #label top2 TFs in each cell type
+   repel = TRUE, label.rectangle = TRUE) + 
+    ggtitle('Accumulated DEGs in all cell types')  + theme(plot.title = element_text(size = 10)) + theme(text=element_text(size=8))
+ 
+pdf(paste(fig_dir, 'sumDEGs.pdf',sep=''),width=3, height=3)
+print(p)
+dev.off()
+
+
+df <- data.frame(Target.Gene = unique(logFC$Target.Gene))
+df$sumDEGs <- lapply(unique(logFC$Target.Gene), function(i){
+    sum(filter(logFC,Target.Gene == i )$num.DEGs) 
+})
+df$sumDEGs <- unlist(df$sumDEGs)
+df$sumupDEGs <- lapply(unique(logFC$Target.Gene), function(i){
+    sum(filter(logFC,Target.Gene == i )$num.up.DEGs) 
+})
+df$sumupDEGs <- unlist(df$sumupDEGs)
+df$sumdownDEGs <- lapply(unique(logFC$Target.Gene), function(i){
+    sum(filter(logFC,Target.Gene == i )$num.down.DEGs) 
+})
+df$sumdownDEGs <- unlist(df$sumdownDEGs)
+df$sumLogFC <- lapply(unique(logFC$Target.Gene), function(i){
+    sum(filter(logFC,Target.Gene == i )$LogFC_abs) 
+})
+df$sumLogFC <- unlist(df$sumLogFC)
+
+genestolabel <- c('ARX','NR2E1','ZNF219','SOX2','NEUROD2','CTCF','SOX9','VEZF1')
+df$highlight <- ifelse(df$Target.Gene %in% genestolabel, "yes","no")
+
+p <- ggscatter(df, x = "sumLogFC", y = "sumDEGs",#ylab='Sum DEGs',
+   color = "highlight", palette = c("black", "#FC4E07"),
+  shape = 21, size = 2, # Points color, shape and size
+   font.label = c(8, "plain","#FC4E07"),
+   label = 'Target.Gene',parse=TRUE,
+   label.select= genestolabel , 
+   #label.select= tail(df$Target.Gene,n=5), #label top2 TFs in each cell type
+   repel = TRUE, label.rectangle = TRUE) + 
+    ggtitle('Accumulated DEGs in all cell types')  + NoLegend() +
+  theme(plot.title = element_text(size = 10)) + theme(text=element_text(size=8))
+ 
+pdf(paste(fig_dir, 'sumlogFC-DEGs-correlation.pdf',sep=''),width=4, height=4)
+print(p)
+dev.off()
+
+pdf(paste(fig_dir, 'sumLogFC-DEG.pdf',sep=''),width=3, height=3)
+print(ggarrange(p1,p2, ncol = 2, nrow = 1))
+dev.off()
+
+
+
+library(scatterpie)
+df$order <- dplyr::dense_rank(df$sumDEGs * df$sumLogFC)
+df$sumLogFC <- df$sumLogFC *100
+
+#set border colors manually
+unique_colors <- c('sumdownDEGs','sumupDEGs') 
+color <- setNames(c('#a7c0ed','#fda683'), unique_colors)
+
+p <- ggplot(data = df,aes(x=sumLogFC, y=sumDEGs)) + 
+  geom_scatterpie(aes(x=sumLogFC, y=sumDEGs,r=order/3), data = df, color='black',
+                           cols=c('sumupDEGs','sumdownDEGs'))  +
+   # geom_scatterpie_legend(df$order/2, x=10, y=250) + 
+  ggprism::theme_prism(
+        base_fontface = "plain", 
+        base_line_size = 0.7, 
+        base_family = "Arial"
+    ) + 
+  coord_cartesian(clip = "off") +
+  ggrepel::geom_text_repel(
+        aes(label = Target.Gene),hjust = 0, nudge_x = 10,
+        parse = TRUE
+    ) + coord_equal()  + 
+  scale_fill_manual(values=color)  
+    
+pdf(paste(fig_dir, 'sumLogFC-DEG_updown.pdf',sep=''),width=6, height=6)
+print(p)
+dev.off()
+
+```
+
+
+```{r accumulated logFC/DEG by class}
+#accumulated logFC
+dir = '~/Desktop/perturb/HM2D/TRADE/2D_guides_cleaned/'
+fig_dir='~/Desktop/perturb/HM2D/figures/'
+
+logFC <- read.csv(file.path(dir,'logFC-DEG.csv'),header = TRUE,row.names = 1)
+logFC$log.DEGs <- log(logFC$num.DEGs+1)
+#logFC$Cell.Type <- as.factor(logFC$Cell.Type)
+#logFC$Cell.Type <- factor(logFC$Cell.Type, levels =  c('RG_DIV','RG-Astro','IPC_EN','EN_ImN','EN','IPC_IN','IN_dLGE-CGE','Technical','OPC-Oligo','MG'))
+
+logFC$class <- logFC$Cell.Type
+logFC <-logFC %>% mutate(class = replace(class, Cell.Type %in% c('RG_DIV','RG-Astro'), "RG")) %>%
+  mutate(class = replace(class, Cell.Type %in% c('IPC_IN','IN_dLGE-CGE'), "IN")) %>% 
+  mutate(class = replace(class, Cell.Type %in% c('IPC_EN','EN_ImN','EN'), "EN")) %>% 
+  mutate(class = replace(class, Cell.Type %in% c('Technical','OPC-Oligo','MG'), "Others"))
+
+dir = '~/Desktop/perturb/HM2D/dcats/'
+df <- read.csv(file.path(dir,'2D_guides_cleaned_knn.csv'), header = TRUE)
+rownames(df) <- df$X
+logFC <- merge(df, logFC, by='row.names', all=TRUE) 
+#add absolute values for coefficent
+logFC$ceoffs_abs <- abs(logFC$ceoffs)
+
+#summarize by target gene and cell class
+df <- logFC %>%
+    group_by(Target.Gene,class) %>%
+    summarise_if(is.numeric, sum, na.rm = TRUE) %>%
+    filter(class != 'Others')
+
+genestolabel <- c('ARX','NR2E1','ZNF219','SOX2','NEUROD2')
+df$highlight <- ifelse(df$Target.Gene %in% genestolabel, "yes","no")
+
+p <- ggscatter(df, x = "ceoffs_abs", y = "num.DEGs",ylab='#DEGs',xlab = '|estimated coefficienct|',
+   color = "highlight", palette = c("black", "#FC4E07"),facet.by = 'class',
+  shape = 19, size = 2, # Points color, shape and size
+   font.label = c(8, "plain","#FC4E07"),
+   label = 'Target.Gene',parse=TRUE,
+   label.select= genestolabel , 
+   add = "reg.line",  # Add regressin line
+   add.params = list(color = "darkgrey", fill = "lightgray"), # Customize reg. line
+   conf.int = TRUE, # Add confidence interval
+   cor.coef = TRUE, # Add correlation coefficient. see ?stat_cor
+   cor.coeff.args = list(method = "pearson",  label.sep = "\n", label.x = 0.7),
+   repel = TRUE, label.rectangle = TRUE,scales="free") + 
+    ggtitle('Correlation of changes in cell abundance and gene expression in each cell class')  + NoLegend() +
+  theme(plot.title = element_text(size = 10)) + theme(text=element_text(size=8))
+ 
+pdf(paste(fig_dir, 'sumcoeff-DEG-class.pdf',sep=''),width=7, height=3)
+print(p)
+dev.off()
+
+
+pdf(paste(fig_dir, 'sumLogFC-DEG-class.pdf',sep=''),width=8, height=4)
+print(p)
+dev.off()
+
+```
+
+
+
+```{r DEG Volcano plots}
+#DEG Volcano plots
+
+library(scRNAtoolVis)
+library(stringr)
+
+dir = '~/Desktop/perturb/HM2D/TRADE/2D_guides_cleaned/'
+#dir = '~/Desktop/perturb/HM2D/TRADE/human'
+fig_dir='~/Desktop/perturb/HM2D/figures/'
+
+results <- data.frame()
+c('NR2E1','ARX','SOX2','ZNF219','ZNF148','SOX9','CTCF','ATF7','MEIS2','VEZF1','E2F1','POU3F2','KLF11','ZNF441',
+   'DEAF1','TFAP2C','POU3F1','BHLHE22','ZBTB18','KAT7','KLF3','RFX2','NFIA','TBR1','SOX5','SATB2','NFIB','POU2F1',
+  'MEF2C','KLF10','NEUROD6','ZBTB20','NR4A2','EMX1','TCF7L1', 'NEUROD2','ZNF281','TCF12','PHF21A','FOS','ASCL1',
+   'JUN','TCF3','SOX6')
+#for (gene in c('NFIB','POU3F1','ASCL1','TBR1','E2F1','VEZF1','SATB2','KAT7','TCF3')){ #for supplement
+for (gene in c('ARX','SOX2','NR2E1','ZNF219','SOX9','CTCF','PHF21A','NEUROD2')){
+  df_gene <- data.frame()
+  for (file in intersect(list.files(dir, pattern = gene), list.files(dir, pattern = 'FDR.csv'))){
+    df <- read.csv(file.path(dir,file),header = TRUE)
+    df$Target.Gene <- gene
+    df$Cell.Type <- str_extract(file, '(?<=\\.)[^.]+(?=\\.)')
+    df_gene <- rbind(df_gene, df)
+    df_gene <- df_gene[order(df_gene$log2FoldChange),]
+    df_gene <- df_gene[!duplicated(df_gene$genes), ]
+  }
+  results <- rbind(results, df_gene)
+}
+
+#rename columns to fit expectations in jjVolcano
+results$avg_log2FC <- results$log2FoldChange
+results$cluster <- results$Target.Gene
+results$gene <- results$genes
+results$p_val <- results$pvalue
+results$p_val_adj <- results$padj
+results <- filter(results,  padj != 'NA')
+
+#add genes to highlight based on occurrence frequency
+df <- data.frame(table(results$genes))
+df <- df[order(df$Freq),]
+genes <- filter(df,Freq >2)$Var1
+genes <-droplevels(genes)
+
+#30 genes labeled
+# [1] AFDN      ATRNL1    BCL11B    DMD       EFNA5     FRY       IL1RAPL1  LHFPL6    LINGO2    LPP       LRRC7     MAGI1     MOXD1     NFIA      NPY       NTS      
+#[17] OPCML     PDE1C     PDZRN3    PPFIBP1   PRKD1     PTPRD     SDK2      TMSB4X    WWTR1     ZNF704    ADGRB3    COL1A2    LINC03051 LSAMP   
+#add disease genes as color
+results <- results %>%
+  mutate(p_val_adj = 
+           ifelse(gene %in% c(NDD$ASD_SFARI_score1,NDD$MDD_Howard2019,NDD$SCZ_Trubetskoy2022,NDD$AD_Bellenguez2022,NDD$BP_Mullins2021,NDD$ADHD_Demontis2023), 0, 1))
+
+log2FC.cutoff = 0.6
+p <- jjVolcano(diffData = filter(results, abs(log2FoldChange) > log2FC.cutoff-0.4),
+          log2FC.cutoff = log2FC.cutoff-0.4,
+          col.type = "adjustP",
+          tile.col = ggsci::pal_npg("nrc", alpha = 0.7)(10)[2:10],
+          #topGeneN = 3,
+          myMarkers = c(levels(genes)
+                        ),
+          size  = 3.5,
+          fontface = 'italic',
+          cluster.order = c('NR2E1','ARX','SOX2','ZNF219','NEUROD2','PHF21A','SOX9','CTCF'),
+          celltypeSize = 4,
+          aesCol = c('darkgrey','#fda683')
+)+Seurat::NoLegend()
+
+pdf(paste(fig_dir, 'jjVolcano-DEG.pdf',sep=''),width=12, height=8)
+print(p)
+dev.off()
+
+#GO term enrichment
+set.seed(123)   
+library(richR) 
+
+genes <- filter(df,Freq >1)$Var1
+genes <- droplevels(genes)
+
+hsago <- buildAnnot(species="human",keytype="SYMBOL",anntype = "GO")
+hsako <- buildAnnot(species = "human",keytype="SYMBOL", anntype = "KEGG")
+resgo <- richGO(c(levels(genes)),godata = hsago,ontology ="BP")
+resko <- richKEGG(c(levels(genes)),kodata = hsako)
+head(detail(resgo))
+head(detail(resko))
+
+pdf(paste(fig_dir, 'GO.pdf',sep=''),width=5, height=2)
+print(ggbar(resgo,top = 5,usePadj = T)+ 
+        scale_fill_gradient("-log10(Padj)", low = "white", high = 'black',limits=c(0,max(7))
+                            )+ggpubr::theme_classic2()+
+        scale_y_continuous(limits = c(0, 0.05)))
+dev.off()
+
+write.csv(results,'~/Desktop/perturb/HM2D/TRADE/2D_guides_cleaned.csv', row.names = FALSE)
+```
+
+
+
+```{r disease overlap}
+library(ggpubr)
+
+dir = '~/Desktop/perturb/NDD/'
+fig_dir='~/Desktop/perturb/HM2D/figures/'
+
+NDD <- as.list(read.csv(file.path(dir, 'disease.csv')))
+
+enrichment <- data.frame()
+#test overlap significance using fisher's exact test
+for (i in c(1,2,3,4)) {
+  df <- data.frame(table(results$genes))
+  output <- data.frame(disease = c("MDD_Howard2019", "AD_Bellenguez2022","SCZ_Trubetskoy2022", 
+                                   "ASD_SFARI_score1","BP_Mullins2021","ADHD_Demontis2023"))
+  rownames(output) <- output$disease
+  for (key in c("MDD_Howard2019", "AD_Bellenguez2022","SCZ_Trubetskoy2022", 
+                "ASD_SFARI_score1","BP_Mullins2021","ADHD_Demontis2023")  #names(NDD)
+       ){
+    a <- length(intersect(NDD[[key]], df[df$Freq > i,]$Var1)) #DEGs showed up >1 
+    b <- length(intersect(NDD[[key]], df[df$Freq < i+1,]$Var1)) #vesus DEGs showed up 1
+    A <- length(df[df$Freq > i,]$Var1) - a
+    B <- length(df[df$Freq < i+1 ,]$Var1) - b
+    output[key, 'gene.ratio'] <- (a/(length(unique(NDD[[key]]))-1))
+    output[key, 'gene.count'] <- a
+    output[key, 'p.value']  <- fisher.test(rbind(c(a,b) , c(A ,B)), alternative="greater")$p.value
+    output[key, '-log10(P)']  <- -log10(fisher.test(rbind(c(a,b) , c(A ,B)), alternative="greater")$p.value)
+    output[key, 'odds.ratio']  <- fisher.test(rbind(c(a,b) , c(A ,B)), alternative="greater")$estimate
+  }
+  output$freq.threshold <- i+1
+  enrichment <- rbind(enrichment, output)
+}
+
+output <- filter(enrichment, freq.threshold == 2)
+p <- ggplot(data = output[order(output$odds.ratio, decreasing = TRUE), ],
+       aes(x = gene.ratio, y = reorder(disease,gene.ratio),
+           color = `-log10(P)`, size = odds.ratio)) + 
+    geom_point() +
+    scale_color_gradient(limits=c(0,4), high = 'black', low = 'white',oob=scales::squish) +
+    theme_classic2() + 
+    ylab("") + 
+    xlab("Gene Ratio") 
+
+pdf(paste(fig_dir, 'disease.pdf',sep=''),width=3.8, height=2)
+print(p+Seurat::NoLegend())
+dev.off()
+
+pdf(paste(fig_dir, 'disease-legend.pdf',sep=''),width=2, height=4)
+print(as_ggplot(get_legend(p)))
+dev.off()
+
+
+pdf(paste(fig_dir, 'disease-supp.pdf',sep=''),width=3.2, height=3)
+print(ggline(enrichment, x = "freq.threshold", y = "odds.ratio", color = "disease",xlab = 'Minimum number of TF perturbations')+ ggsci::scale_color_simpsons()+Seurat::NoLegend())
+dev.off()
+  
+pdf(paste(fig_dir, 'disease-supp-legend.pdf',sep=''),width=8, height=1)
+print(as_ggplot(get_legend(ggline(enrichment, x = "freq.threshold", y = "odds.ratio", color = "disease")+ ggsci::scale_color_simpsons())))
+dev.off()
+  
+```
+
+
+```{r}
+library(clusterProfiler)
+library(org.Hs.eg.db)
+library(DOSE)
+
+#background genes
+library(zellkonverter)
+library(Seurat)
+library(SingleCellExperiment)
+dir = '~/Desktop/'
+setwd(dir)
+sourcefile <- file.path(dir, 'D7-filtered_guides.h5ad')
+ad <- readH5AD(sourcefile,X_name='counts')
+subset_genes <- c()
+for (celltype in levels(ad$supervised_name)){
+  gene_threshold <- rowMeans(assay(subset(ad,, supervised_name == celltype))) > 2
+  subset_genes <- c(subset_genes, rownames(ad[gene_threshold, ]))
+}
+
+#GO
+df <- data.frame(table(results$genes))
+ego <- enrichGO(
+    gene = as.character((df[df$Freq > 1,]$Var1)),
+    OrgDb = org.Hs.eg.db, # Human database
+    keyType = "SYMBOL",
+    ont = "BP",
+    universe = as.character((df$Var1)) # Specify the background gene list
+)
+#ego@result$logp <- -log10(ego@result$p.adjust)
+#dotplot(ego, x="GeneRatio",showCategory=5,size = 'zScore')+ 
+#    scale_fill_gradient("p.adjust", high = "white", low = 'black',limits=c(0,0.005)
+#    )+ggpubr::theme_classic2()
+
+ego <- as.data.frame(ego) 
+ego[['-log10(Padj)']]  <- -log10(ego$p.adjust)
+ego$GeneRatio <- sapply(ego$GeneRatio, function(x) {
+  parts <- as.numeric(unlist(strsplit(x, "/")))
+  parts[1] / parts[2]
+})
+p <- ggplot(data = ego[order(ego$GeneRatio, decreasing = TRUE), ],
+       aes(x = GeneRatio, y = reorder(Description,GeneRatio),
+           color = `-log10(Padj)`, size = zScore)) + 
+    geom_point() +
+    scale_color_gradient(limits=c(0,4), high = 'black', low = 'white',oob=scales::squish) +
+    theme_classic2() + 
+    ylab("") + 
+    xlab("Gene Ratio") +
+    scale_x_continuous(limits = c(0, 0.25))
+
+
+pdf(paste(fig_dir, 'GO.pdf',sep=''),width=3.8, height=1.5)
+print(p+Seurat::NoLegend())
+dev.off()
+
+pdf(paste(fig_dir, 'GO-legend.pdf',sep=''),width=2, height=4)
+print(as_ggplot(get_legend(p)))
+dev.off()
+
+#DisGenet
+genes <- as.data.frame(AnnotationDbi::select(org.Hs.eg.db, columns = "ENTREZID", keytype = "SYMBOL",
+                                    keys = as.character((df[df$Freq > 1,]$Var1))
+))$ENTREZID
+universe <- as.data.frame(AnnotationDbi::select(org.Hs.eg.db, columns = "ENTREZID", keytype = "SYMBOL",
+                                    keys = as.character((df$Var1)) 
+))$ENTREZID
+dgn_result <- enrichDGN(
+    gene = genes ,
+    pvalueCutoff = 0.05,
+    universe = universe, 
+    readable = TRUE
+)
+barplot(dgn_result)
+
+```
+
+
+```{r enhancedvolcano}
+library(EnhancedVolcano)
+library(ggprism)
+
+
+library(dplyr)
+library(ggpubr)
+
+
+dir = '~/Desktop/perturb/HM2D/DEseq2/'
+df_human <- read.csv(file.path(dir,'IN_LMO1RIC3.csv'), header = TRUE, row.names='X')
+df_macaque <- read.csv(file.path(dir,'IN_LMO1RIC3_macaque.csv'), header = TRUE, row.names='X')
+
+genestolabel <- c(rownames(head(df_human[order(df_human$stat, decreasing = TRUE), ], 16)),
+                              rownames(head(df_human[order(df_human$stat, decreasing = FALSE), ], 3)),
+                  'SMAD2','SMAD3','ACVR1')
+
+p <- EnhancedVolcano(df_human,
+                lab = rownames(df_human),
+                selectLab = genestolabel,
+                x = 'log2FoldChange',
+                y = 'padj',
+                #title = 'IN_LMO1RIC3 versus other INs',
+                pCutoff = 10e-2,
+                FCcutoff = 0.5,
+                xlab = bquote(~Log[2]~ 'fold change'),
+                pointSize = 3.0,
+                labSize = 4.0,
+                labFace = 'bold',
+                col=c('black', 'black', 'black', 'red3'),
+                colAlpha = 1,
+                boxedLabels = TRUE,
+                legendPosition = 'right',
+                legendLabSize = 14,
+                legendIconSize = 4.0,
+                drawConnectors = TRUE,
+                widthConnectors = 1.0,
+                colConnectors = 'black'
+               ) + theme_classic2()  + ggtitle('IN_LMO1RIC3 versus other INs') + Seurat::NoLegend()
+
+fig_dir='~/Desktop/perturb/HM2D/figures/'
+pdf(paste(fig_dir, 'volcano-IN.pdf',sep=''),width=6, height=6)
+print(p)
+dev.off()
+
+p <- EnhancedVolcano(df_macaque,
+                lab = rownames(df_macaque),
+                selectLab = genestolabel,
+                x = 'log2FoldChange',
+                y = 'padj',
+                #title = 'IN_LMO1RIC3 versus other INs',
+                pCutoff = 10e-2,
+                FCcutoff = 0.5,
+                xlab = bquote(~Log[2]~ 'fold change'),
+                pointSize = 3.0,
+                labSize = 4.0,
+                labFace = 'bold',
+                col=c('black', 'black', 'black', 'red3'),
+                colAlpha = 1,
+                boxedLabels = TRUE,
+                legendPosition = 'right',
+                legendLabSize = 14,
+                legendIconSize = 4.0,
+                drawConnectors = TRUE,
+                widthConnectors = 1.0,
+                colConnectors = 'black'
+               ) + theme_classic2()  + ggtitle('IN_LMO1RIC3 versus other INs') + Seurat::NoLegend()
+
+fig_dir='~/Desktop/perturb/HM2D/figures/'
+pdf(paste(fig_dir, 'volcano-IN-macaque.pdf',sep=''),width=6, height=6)
+print(p)
+dev.off()
+
+genes <- intersect(rownames(filter(df_human, padj < 0.05 & abs(log2FoldChange) > 0.5)), rownames(df_macaque))
+df_human <- df_human[genes,]
+df_macaque <- df_macaque[genes,]
+df <- data.frame(gene = rownames(df_human), human = df_human$log2FoldChange,
+                 macaque = df_macaque$log2FoldChange)
+df$label <- ifelse(df$gene %in% genestolabel, 'yes', 'no')
+rownames(df) <- df$gene
+p <-ggscatter(na.omit(df), x = "human", y = "macaque", xlab = "log2FC_human", ylab = "log2FC_macaque",
+          #color = "black", shape = 21, size = 2,
+          #conf.int = TRUE, # Add confidence interval
+          cor.coef = TRUE, # Add correlation coefficient. see ?stat_cor
+          cor.coeff.args = list(method = "pearson",  label.sep = "\n"),
+          color = "label", size = 1.5, palette = c('black','#fda683'),
+          #label = 'gene', parse=TRUE,
+          #label.select = filter(df, label == 'yes')$gene, 
+          repel = TRUE, label.rectangle = TRUE,font.label = c(8, "plain")
+)  + geom_abline(linetype="dashed", color = "red") + 
+    geom_vline(xintercept=0, linetype="dotted") + geom_hline(yintercept=0,linetype="dotted") +
+    ggrepel::geom_text_repel(
+        aes(label = if_else(gene %in% genestolabel, gene, ""))
+    ) + 
+    ggtitle(paste0('Human vesus Macaque IN_LMO1RIC3'))  + theme(plot.title = element_text(size = 10)) + theme(text=element_text(size=12)) + rremove('legend')
+
+fig_dir='~/Desktop/perturb/HM2D/figures/'
+pdf(paste(fig_dir, 'scatter-IN.pdf',sep=''),width=5.5, height=5.5)
+print(p)
+dev.off()
+
+
+library(pathfindR)
+df <- data.frame(Gene_symbol = rownames(df_human), logFC = df_human$log2FoldChange,
+                 FDR_p = df_human$padj)
+
+output_df <- run_pathfindR(na.omit(df),gene_sets="GO-BP")
+
+fig_dir='~/Desktop/perturb/HM2D/figures/'
+pdf(paste(fig_dir, 'GO-IN.pdf',sep=''),width=8, height=3.2)
+enrichment_chart(
+  output_df,
+  top_terms = 10,
+  plot_by_cluster = FALSE,
+  num_bubbles = 4,
+  even_breaks = TRUE
+) + theme_classic2() + theme(text=element_text(size=15))
+dev.off()
+
+
+p <- ggplot(data = output_df[output_df(output$lowest_p, decreasing = TRUE), ],
+       aes(x = gene.ratio, y = reorder(disease,gene.ratio),
+           color = `-log10(P)`, size = odds.ratio)) + 
+    geom_point() +
+    scale_color_gradient(limits=c(0,4), high = 'black', low = 'white',oob=scales::squish) +
+    theme_classic2() + 
+    ylab("") + 
+    xlab("Gene Ratio") 
+
+```
+
+
+
+
+
+
+```{r scatter-human versus human}
+fig_dir='~/Desktop/perturb/HM2D/figures/'
+
+results <- data.frame()
+for (gene in c('NR2E1','ARX','SOX2','ZNF219','NEUROD2')) {
+    for (celltype in c('RG-Astro', 'RG_DIV','IPC_EN','IPC_IN','EN_ImN','EN','OPC-Oligo','Technical',
+                       'IN_dLGE-CGE')){
+        dir = '~/Desktop/perturb/HM2D/TRADE'
+        if (file.exists(file.path(dir,'human_guides',paste(gene, celltype,'FDR.csv',sep='.')))) {
+            results_human <- read.csv(file.path(dir,'human_guides',paste(gene, celltype,'FDR.csv',sep='.')),header = TRUE,row.names = 7)
+        } else {next}
+        if (file.exists(file.path(dir,'2D_guides_cleaned',paste(gene, celltype,'FDR.csv',sep='.')))) {
+            results_macaque <- read.csv(file.path(dir,'2D_guides_cleaned',paste(gene, celltype,'FDR.csv',sep='.')),header = TRUE,row.names = 7)
+        } else {next}
+        genestoplot <- union(rownames(results_human), rownames(results_macaque))
+        
+        dir = '~/Desktop/perturb/HM2D/DEseq2/'
+        results_human <- read.csv(file.path(dir,'human_guides',paste(gene, celltype,'csv',sep='.')),header = TRUE,row.names = 1)
+        results_macaque <- read.csv(file.path(dir,'2D_guides_cleaned',paste(gene, celltype,'csv',sep='.')),header = TRUE,row.names = 1)
+        results_human <- results_human[genestoplot,]
+        results_macaque <- results_macaque[genestoplot,]
+        df <- data.frame(gene = rownames(results_human), human = results_human$log2FoldChange,macaque =
+                             results_macaque$log2FoldChange)
+        df$perturbation <- gene
+        df$celltype <- celltype
+        results <- rbind(results,df)
+    }
+}
+
+p <- ggpubr::ggscatter(na.omit(results), x = "human", y = "macaque",facet.by = 'perturbation',
+                  xlab = 'logFC in initial screen', ylab='logFC in targeted screen',
+                  #conf.int = TRUE, # Add confidence interval
+                  cor.coef = TRUE, # Add correlation coefficient. see ?stat_cor
+                  cor.coeff.args = list(method = "pearson",  label.sep = ",",label.y = 7.8),shape=21,
+                  fill='black'
+) + stat_regline_equation(label.y = 7) + geom_abline(linetype="dashed", color = "red") + 
+    geom_vline(xintercept=0, linetype="dotted") + geom_hline(yintercept=0,linetype="dotted") + 
+    #ggtitle(paste0('DEG LogFC'))  + 
+    theme(plot.title = element_text(size = 10)) + theme(text=element_text(size=12)) 
+
+
+pdf(paste(fig_dir, 'DEG-correlation-human.pdf',sep=''),width=7, height=5)
+p
+dev.off()
+```
+
+
+Lineage tracing stuff
+```{r clonal distribution across perturbation}
+library(ggpubr)
+library(ggplot2)
+library(dplyr)
+library(ggsci)
+library(tidyverse)
+library(rstatix)
+library(broom)
+library(ggprism)
+
+df <- read.csv('~/Desktop/perturb/HM2D/scLiTr.csv')
+df <- read.csv('~/Desktop/perturb/HM2D/scLiTr_cleaned.csv')
+df <- filter(df, gene_NKS != 'WT')
+df <- filter(df, gene_NKS %in% c('non-targeting','NR2E1','ARX','SOX2','ZNF219','NEUROD2'))%>%
+  mutate(gene_NKS = replace(gene_NKS, gene_NKS == 'non-targeting', "NT"))
+#human
+df <- filter(df, batch %in% c('GW17#136-F','GW18#183-M','GW19#153-F', 'GW22#147-M'))
+#macaque
+df <- filter(df, batch %in% c('CTE75#14-F','CTE80#12-M','CTE80#19-M'))
+  
+
+#normalize count between individuals
+df <- df %>%
+  group_by(batch, gene_NKS) %>%
+  mutate(sum = sum(count)) %>%
+  ungroup() %>%
+  mutate(
+    norm = count / sum,
+    stage = sub("#.*", "", batch)
+  )
+
+#scale based on non-targeting
+df <- df %>%
+  group_by(Clonal.cluster) %>%
+  mutate(
+    NT = mean(norm[gene_NKS == 'NT'], na.rm = TRUE),
+    scaled = (norm - NT)
+  ) %>%
+  ungroup()
+
+df$gene_NKS <- as.factor(df$gene_NKS)
+df$gene_NKS <- factor(df$gene_NKS, levels = c('NT','NR2E1','ARX','SOX2','ZNF219','NEUROD2'))
+
+
+df_p_val <- df %>%
+    rstatix::group_by(Clonal.cluster) %>%
+    rstatix::t_test(norm ~ gene_NKS, paired = TRUE, ref.group = 'NT') %>%
+    rstatix::add_significance(p.col = "p") %>% 
+    rstatix::add_xy_position(x = "gene_NKS", dodge = 0)  %>%
+    filter(p.signif != 'ns') %>% 
+    mutate(y.position = y.position -0.12)
+
+p <- ggbarplot(df, 
+          x = "gene_NKS", y = "norm",  color = "black", fill= 'gene_NKS', ylab='Fraction',xlab = '',
+          add = c("mean_se", "jitter"), add.params = list(color = "stage" , shape = 19),
+          palette =pal_npg("nrc", alpha = 0.7)(10),
+          error.plot = "upper_errorbar",
+          position = position_dodge(),facet.by = 'Clonal.cluster',scales="free_y") + Seurat::RotatedAxis() + # Add global p-value
+    add_pvalue(df_p_val, 
+               #x = "group2",
+               label = "p.signif", label.size = 6,
+               tip.length = 0) #+  #heme(axis.text.x=element_blank())
+
+#macaque
+#for macaque: clean up stage annotation
+df$area <- ifelse(df$batch == 'CTE80#19-M', 'PFC', 'Ctx')
+df$stage <- substr(df$stage, 3, nchar(df$stage))
+df$stage <- paste(df$stage, df$area,sep='-')
+p <- ggbarplot(filter(df, Clonal.cluster %in% c('EN-biased','IN-biased','IN/EN-biased','RG/Astro-biased')), 
+          x = "gene_NKS", y = "norm", color = "gene_NKS", fill = "gene_NKS", ylab='Ratio',xlab = '',
+          add = c("mean_se", "dotplot"), add.params = list(color = "stage"), 
+          palette = c(ggsci::pal_simpsons("springfield")(10)[10] , ggsci::pal_simpsons("springfield")(10)[1:9]),
+          error.plot = "upper_errorbar",
+          position = position_dodge(),facet.by = 'Clonal.cluster',scales="free_y") + Seurat::RotatedAxis() + # Add global p-value
+    stat_compare_means(aes(x = "gene_NKS", y = "norm",label = after_stat(p.signif)),comparisons = list(c("ZNF219", "non-targeting"),c("SOX2", "non-targeting"),c("NR2E1", "non-targeting")),method = "t.test",  paired = TRUE,hide.ns=TRUE)
+
+
+fig_dir='~/Desktop/perturb/HM2D/figures/'
+pdf(paste(fig_dir, 'scLiTr-human.pdf',sep=''),width=8, height=6)
+print(p+Seurat::NoLegend())
+dev.off()
+
+pdf(paste(fig_dir, 'scLiTr-human-legend.pdf',sep=''),width=12, height=2)
+print(as_ggplot(get_legend(p)))
+dev.off()
+
+```
+
+
+
+```{r scLiTr clone heatmap}
+library(tidyr)
+library(dplyr)
+library(ComplexHeatmap)
+library(colorRamp2)
+col_fun = colorRamp2(c(-0.2,0, 0.2), c('#316dd4', '#FFFFFF', '#f43f03'))
+#col_fun = colorRamp2(c(-1.5,0, 1.5), c('#f43f03', '#FFFFFF', '#316dd4'))
+
+reshaped_df <- df %>%
+  dplyr::select(Clonal.cluster, gene_NKS, scaled) %>%
+  group_by(Clonal.cluster, gene_NKS) %>%
+  summarise(scaled = mean(scaled, na.rm = TRUE), .groups = "drop") %>%
+  pivot_wider(names_from = gene_NKS, values_from = scaled)
+
+reshaped_df <- as.data.frame(reshaped_df)
+rownames(reshaped_df) <- reshaped_df$Clonal.cluster
+reshaped_df$Clonal.cluster <- NULL
+reshaped_df$NT <- NULL
+
+df_p_val <- df %>%
+    rstatix::group_by(Clonal.cluster) %>%
+    rstatix::t_test(norm ~ gene_NKS, paired = TRUE, ref.group = 'NT') %>%
+    rstatix::add_significance(p.col = "p") %>% 
+    dplyr::select(Clonal.cluster, group2, p) %>%
+    pivot_wider(names_from = group2, values_from = p, values_fill = 1) %>%
+    dplyr::select(-Clonal.cluster) %>%
+    mutate(across(everything(), ~ ifelse(is.nan(.), 1, .)))
+
+ht1 <- Heatmap(as.data.frame(reshaped_df),name = "Ratio", col = col_fun,
+        cluster_rows = FALSE,cluster_columns = FALSE, column_title = "Human",
+        #column_labels = as.expression(lapply(colnames(reshaped_df), function(a) bquote(italic(.(a))))),
+        border_gp = gpar(col = "black", lty = 2), cell_fun = function(j, i, x, y, w, h, fill) {
+    if(df_p_val[i, j] < 0.001) {
+        grid.text("***", x, y)
+    } else if(df_p_val[i, j] < 0.01) {
+        grid.text("**", x, y)
+    } else if(df_p_val[i, j] < 0.05) {
+        grid.text("*", x, y)
+    } else if(df_p_val[i, j] < 0.1) {
+        grid.text("•", x, y)
+    }
+})
+
+ht2 <- Heatmap(as.data.frame(reshaped_df),name = "Ratio", col = col_fun,
+        cluster_rows = FALSE,cluster_columns = FALSE, column_title = "Macaque",
+        #column_labels = as.expression(lapply(colnames(reshaped_df), function(a) bquote(italic(.(a))))),
+        border_gp = gpar(col = "black", lty = 2), cell_fun = function(j, i, x, y, w, h, fill) {
+    if(df_p_val[i, j] < 0.001) {
+        grid.text("***", x, y)
+    } else if(df_p_val[i, j] < 0.01) {
+        grid.text("**", x, y)
+    } else if(df_p_val[i, j] < 0.05) {
+        grid.text("*", x, y)
+    } else if(df_p_val[i, j] < 0.1) {
+        grid.text("•", x, y)
+    }
+})
+
+ht <- Heatmap(as.data.frame(reshaped_df),name = "Ratio", col = col_fun,
+               cluster_rows = FALSE,cluster_columns = FALSE, column_title = "Combined",
+               #column_labels = as.expression(lapply(colnames(reshaped_df), function(a) bquote(italic(.(a))))),
+               border_gp = gpar(col = "black", lty = 2), cell_fun = function(j, i, x, y, w, h, fill) {
+                   if(df_p_val[i, j] < 0.001) {
+                       grid.text("***", x, y)
+                   } else if(df_p_val[i, j] < 0.01) {
+                       grid.text("**", x, y)
+                   } else if(df_p_val[i, j] < 0.05) {
+                       grid.text("*", x, y)
+                   } else if(df_p_val[i, j] < 0.1) {
+                       grid.text("•", x, y)
+                   }
+               })
+
+pdf(paste(fig_dir, 'scLiTr.heatmap.pdf',sep=''),width=4, height=3)
+print(ht1 + ht2)
+dev.off()
+
+pdf(paste(fig_dir, 'scLiTr.heatmap.combined.pdf',sep=''),width=5.2, height=3)
+print(ht1 + ht2+ht)
+dev.off()
+
+
+```
+
+
+
+
+```{r clonal distribution across stages}
+library(ggpubr)
+library(ggplot2)
+library(dplyr)
+library(ggalluvial)
+library(ggsci)
+library(viridis)
+
+df <- read.csv('~/Desktop/perturb/HM2D/scLiTr.csv')
+df <- read.csv('~/Desktop/perturb/HM2D/scLiTr_cleaned.csv')
+#df <- read.csv('~/Desktop/scLiTr_cleaned.csv')
+df <- filter(df, gene_NKS != 'WT')
+
+#human
+df <- filter(df, batch %in% c('GW17#136-F','GW18#183-M','GW19#153-F', 'GW22#147-M'))
+
+#macaque
+df <- filter(df, batch %in% c('CTE75#14-F','CTE80#12-M','CTE80#19-M'))
+df$batch <- substr(df$batch, 3, nchar(df$batch))
+df$area <- ifelse(df$batch == 'E80#19-M', 'PFC', 'Ctx')
+
+
+#group by batch and stage and calculate percentage
+df <- df %>% group_by(batch,Clonal.cluster) %>% 
+    summarise(sum_count=sum(count),
+              .groups = 'drop') %>%
+    group_by(batch) %>%
+  mutate(total_count = sum(sum_count)) %>%
+  ungroup() %>%
+  mutate(
+    percentage = sum_count/total_count * 100,
+    stage = sub("#.*", "", batch),
+    gene_NKS = replace(gene_NKS, gene_NKS == 'non-targeting', "NT")
+    )
+
+
+
+p <- ggplot(df, aes(x=stage, y=percentage, fill=Clonal.cluster))+
+    geom_flow(aes(alluvium = Clonal.cluster), alpha= .5, color = "black",
+              curve_type = "linear", 
+              width = .5) +
+    geom_col(width = .5, color = "black") +
+    scale_fill_viridis(option = "B", discrete = T) + #scale_fill_cosmic("signature_substitutions")+
+    scale_y_continuous(NULL, expand = c(0,0)) +
+    cowplot::theme_minimal_hgrid() +
+    theme(panel.grid.major = element_blank() 
+          #axis.text.y = element_blank(), 
+          #axis.ticks.y = element_blank()
+          ) +
+    ggtitle('Clonal cluster percentage along stages')#+
+    #Seurat::RotatedAxis()
+
+fig_dir='~/Desktop/perturb/HM2D/figures/'
+pdf(paste(fig_dir, 'barplot-stage-human.pdf',sep=''),width=4.6, height=4.5)
+print(p)
+dev.off()
+
+fig_dir='~/Desktop/perturb/HM2D/figures/'
+pdf(paste(fig_dir, 'barplot-stage-macaque.pdf',sep=''),width=4.6, height=4)
+print(p)
+dev.off()
+
+df <- read.csv('~/Desktop/perturb/HM2D/scLiTr.csv')
+df <- read.csv('~/Desktop/perturb/HM2D/scLiTr_cleaned.csv')
+df <- filter(df, gene_NKS != 'WT')
+#human
+df <- filter(df, batch %in% c('GW17#136-F','GW18#183-M','GW19#153-F', 'GW22#147-M'))  %>%
+  mutate(gene_NKS = replace(gene_NKS, gene_NKS == 'non-targeting', "NT"))
+
+#macaque
+df <- filter(df, batch %in% c('CTE75#14-F','CTE80#12-M','CTE80#19-M'))
+df$batch <- substr(df$batch, 3, nchar(df$batch))
+df$area <- ifelse(df$batch == 'E80#19-M', 'PFC', 'Ctx')
+
+myplots <- list()
+for (gene in c('NT','NR2E1','ARX','SOX2','ZNF219','NEUROD2')) {
+  sub <- df %>% filter(gene_NKS == gene) %>% 
+    group_by(batch,Clonal.cluster) %>% 
+    summarise(sum_count=sum(count),
+              .groups = 'drop') %>%
+    group_by(batch) %>%
+  mutate(total_count = sum(sum_count)) %>%
+  ungroup() %>%
+  mutate(
+    percentage = sum_count/total_count * 100,
+    stage = sub("#.*", "", batch)
+    )
+  #sub$stage <- paste(sub$stage, sub$area,sep='-')
+  myplots[[gene]] <- ggplot(sub, aes(x=stage, y=percentage, fill=Clonal.cluster))+
+    geom_flow(aes(alluvium = Clonal.cluster), alpha= .5, color = "black",
+              curve_type = "linear", 
+              width = .5) +
+    geom_col(width = .5, color = "black") +
+    scale_fill_viridis(option = "B", discrete = T) + #scale_fill_cosmic("signature_substitutions")+
+    scale_y_continuous(NULL, expand = c(0,0)) +
+    cowplot::theme_minimal_hgrid() +
+    theme(panel.grid.major = element_blank() 
+          #axis.text.y = element_blank(), 
+          #axis.ticks.y = element_blank()
+          ) + xlab("")+ylab("")+
+    ggtitle(gene) + Seurat::NoLegend()
+}
+  
+
+fig_dir='~/Desktop/perturb/HM2D/figures/'
+pdf(paste(fig_dir, 'barplot-stage-human_condition.pdf',sep=''),width=16, height=2.5)
+print(ggarrange(plotlist = myplots, ncol = 6, nrow = 1))
+dev.off()
+
+fig_dir='~/Desktop/perturb/HM2D/figures/'
+pdf(paste(fig_dir, 'barplot-stage-human_condition_sub.pdf',sep=''),width=2.5, height=7.5)
+print(ggarrange(plotlist = myplots, ncol = 1, nrow = 3))
+dev.off()
+
+```
+
+
+
+
+```{r}
+library(UpSetR)
+library(dittoSeq)
+library(wesanderson)
+names(wes_palettes)
+library("viridis") 
+library(RColorBrewer)
+library(zellkonverter)
+library(Seurat)
+library(cowplot)
+library(dplyr)
+library(ComplexHeatmap)
+
+dir = '~/Desktop/'
+#dir = '~/Desktop/perturb/HM2D/'
+setwd(dir)
+
+sourcefile <- file.path(dir, 'HM2D-filtered_guides.h5ad') 
+sourcefile <- file.path(dir, 'HM2D-filtered_guides_scLiTr.h5ad')
+ad <- readH5AD(sourcefile,X_name='counts')
+ad$stage <- sub("#.*", "", ad$individual)
+ad$sex <- sub(".*-", "", ad$individual)
+ad$unique_clone <- paste0(ad$clone_barcode,ad$individual)
+ad <- subset(ad, , clone_barcode != 'nan')
+#ad <- subset(ad, , class != 'Microglia')
+#ad <- subset(ad, , class != 'Technical')
+#ad$class <- droplevels(ad$class)
+
+#ad <- subset(ad,,ad$gene_NKS == 'non-targeting')
+
+# Plot the histogram for unique clones with total_count > 2
+#remove clones that have conflicted guide assignments
+df <- as_tibble(ad@colData) %>%
+  group_by(unique_clone, sgRNA) %>%
+  summarise(count = n(), .groups = "drop") %>%
+  filter(count != 0) %>%
+  group_by(unique_clone) %>%
+  mutate(
+    total_count = sum(count),
+    percentage = (count / total_count) * 100,
+    max_percentage = max(percentage)
+  ) %>%
+  ungroup() %>%
+  arrange(desc(max_percentage)) %>%
+  distinct(unique_clone, .keep_all = TRUE) #%>%
+  #filter(total_count > 2)
+
+p1 <- gghistogram(df, x = "total_count", fill = "black",xlab = 'Cell count per clone',ylab = 'clone count',
+            #add = "mean", #rug = TRUE,
+            title = 'Clone size distribution')+scale_x_continuous(breaks = get_breaks(n = 10))+ yscale("log10", .format = TRUE)
+
+p2 <- gghistogram(df, x = "max_percentage", fill = "black",xlab = '%sgRNA in each clone',ylab ='clone count',
+            add = "mean", #rug = TRUE,
+            title = 'Max %sgRNA per clone')+scale_x_continuous(breaks = get_breaks(n = 10))
+
+fig_dir = '~/Desktop/perturb/HM2D/figures/'
+pdf(paste(fig_dir, 'STICR.guide.histogram.pdf',sep=''),width=4, height=4)
+print(ggarrange(p1,p2, ncol=1))
+dev.off()
+
+
+#remove clones that have conflicted guide assignments
+df <- as_tibble(ad@colData) %>%
+  group_by(unique_clone, sgRNA) %>%
+  summarise(count = n(), .groups = "drop") %>%
+  filter(count != 0) %>%
+  group_by(unique_clone) %>%
+  mutate(
+    total_count = sum(count),
+    percentage = (count / total_count) * 100,
+    max_percentage = max(percentage)
+  ) %>%
+  ungroup() %>%
+  arrange(desc(max_percentage)) %>%
+  distinct(unique_clone, .keep_all = TRUE) %>%
+  filter(max_percentage == 100) %>%
+  filter(total_count > 2) 
+
+ad <- subset(ad, , unique_clone %in% df$unique_clone)
+
+#for class
+df_tmp <- subset(ad, ,species == 'human')@colData
+df_tmp$unique_clone <- as.character(df_tmp$unique_clone)
+df_tmp$class <- as.character(df_tmp$class)
+df_tmp <- split(df_tmp$unique_clone, df_tmp$class)
+df_tmp <- lapply(df_tmp, unique)
+
+#for INs
+df_tmp <- subset(ad, ,species == 'human')@colData
+df_tmp$unique_clone <- as.character(df_tmp$unique_clone)
+df_tmp$class <- as.character(df_tmp$class)
+df_tmp$predictions_IN <- as.character(df_tmp$predictions_IN)
+df_tmp <- as_tibble(df_tmp)  %>% mutate(predictions_IN = replace(predictions_IN, is.na(predictions_IN) , df_tmp$class))
+df_tmp <- split(df_tmp$unique_clone, df_tmp$predictions_IN)
+df_tmp <- lapply(df_tmp, unique)
+
+#upset plot
+m = make_comb_mat(df_tmp, mode = "intersect")
+m = m[comb_degree(m) >= 2]
+ss = set_size(m)
+cs = comb_size(m)
+p <- UpSet(m,
+      set_order = order(ss),
+      comb_order = order(comb_degree(m), -cs)
+      )
+
+fig_dir='~/Desktop/perturb/HM2D/figures/'
+pdf(paste(fig_dir, 'upset-human.pdf',sep=''),width=4, height=2.6)
+print(p)
+dev.off()
+
+
+#dittoseq barplot for individual clones
+myplots <- list()
+for (cluster in c('EN-biased','IN-biased','IN/EN-biased','RG/Astro-biased','Oligo-biased')){
+  myplots[[cluster]] <- dittoBarPlot(subset(ad,,ad$Clonal.cluster == cluster), retain.factor.levels = TRUE,
+             var='class', group.by = 'unique_clone',xlab = '',main = cluster,ylab='Fraction',
+             color.panel = brewer.pal(n=6,"Set3"),
+             scale = "percent")+ theme(axis.text.x=element_blank()) 
+}
+
+
+pdf(paste(fig_dir, 'barplot-cloneclass.pdf',sep=''),width=8, height=8)
+ggpubr::ggarrange(plotlist = myplots, ncol = 1, nrow = 5)
+dev.off()
+
+pdf(paste(fig_dir, 'barplot-cloneclass-legend.pdf',sep=''),width=8, height=8)
+dittoBarPlot(subset(ad,,ad$Clonal.cluster == cluster), retain.factor.levels = TRUE,
+             var='class', group.by = 'unique_clone',xlab = '',main = cluster,ylab='Fraction',
+             color.panel = brewer.pal(n=6,"Set3"),
+             scale = "percent")+ theme(axis.text.x=element_blank())
+dev.off()
+
+
+
+```
+
+```{r clone size (>3)}
+library(ggpubr)
+library(ggplot2)
+library(dplyr)
+library(ggalluvial)
+library(ggsci)
+library(viridis)
+
+df <- read.csv('~/Desktop/perturb/HM2D/scLiTr.obs.csv')
+df$gene_NKS <- as.factor(df$gene_NKS)
+df$gene_NKS <- factor(df$gene_NKS, levels = c('non-targeting','NR2E1','ARX','SOX2','ZNF219','NEUROD2'))
+
+#remove clones w conflicted sgRNA assignment
+df <- filter(df, X %in% unique(ad$unique_clone))
+
+#human
+df <- filter(df, batch %in% c('GW17#136-F','GW18#183-M','GW19#153-F', 'GW22#147-M'))
+p <- ggviolin(df, x = "gene_NKS", y = "n_cells",fill = "gene_NKS", 
+         palette = pal_npg("nrc", alpha = 0.7)(10),xlab='',
+         add = "mean_sd", error.plot = "crossbar",add.params = list(fill = "white"))+stat_compare_means(aes(x = "gene_NKS", y = "n_cells",label = after_stat(p.signif)),comparisons = list(c("ARX", "non-targeting")), method = "t.test",  paired = FALSE,hide.ns=TRUE) + 
+  Seurat::RotatedAxis() 
+
+fig_dir='~/Desktop/perturb/HM2D/figures/'
+pdf(paste(fig_dir, 'vln-clonesize-human.pdf',sep=''),width=6, height=5.1)
+print(p)
+dev.off()
+
+p <- ggviolin(filter(df, Clonal.cluster %in% c("EN-biased","IN-biased", "IN/EN-biased")), x = "gene_NKS", y = "n_cells",fill = "gene_NKS", facet.by = 'Clonal.cluster',
+              palette = pal_npg("nrc", alpha = 0.7)(10),xlab='',
+              add = "mean_sd", error.plot = "crossbar",add.params = list(fill = "white"))+stat_compare_means(aes(x = "gene_NKS", y = "n_cells",label = after_stat(p.signif)),comparisons = list(c("NR2E1", "non-targeting"),c("ARX", "non-targeting")), method = "t.test",  paired = FALSE,hide.ns=TRUE) + 
+  Seurat::RotatedAxis() + Seurat::NoLegend()
+
+pdf(paste(fig_dir, 'vln-clonesize-cluster-human.pdf',sep=''),width=9, height=5)
+print(p)
+dev.off()
+
+#macaque
+df <- filter(df, batch %in% c('CTE75#14-F','CTE80#12-M','CTE80#19-M'))
+p <- ggviolin(df, x = "gene_NKS", y = "n_cells",fill = "gene_NKS", 
+         palette = pal_npg("nrc", alpha = 0.7)(10), xlab='',
+         add = "mean_sd", error.plot = "crossbar",add.params = list(fill = "white"))+ Seurat::RotatedAxis() + ylim(0,50)
+
+fig_dir='~/Desktop/perturb/HM2D/figures/'
+pdf(paste(fig_dir, 'vln-clonesize-macaque.pdf',sep=''),width=6, height=5.1)
+print(p)
+dev.off()
+
+p <- ggviolin(filter(df, Clonal.cluster %in% c("EN-biased","IN-biased", "IN/EN-biased")), x = "gene_NKS", y = "n_cells",fill = "gene_NKS", facet.by = 'Clonal.cluster',
+              palette = pal_npg("nrc", alpha = 0.7)(10),xlab='',
+              add = "mean_sd", error.plot = "crossbar",add.params = list(fill = "white"))+stat_compare_means(aes(x = "gene_NKS", y = "n_cells",label = after_stat(p.signif)),comparisons = list(c("NR2E1", "non-targeting"),c("ARX", "non-targeting")), method = "t.test",  paired = FALSE,hide.ns=TRUE) + 
+  Seurat::RotatedAxis() + Seurat::NoLegend()
+
+pdf(paste(fig_dir, 'vln-clonesize-cluster-macaque.pdf',sep=''),width=9, height=5)
+print(p)
+dev.off()
+
+#human versus macaque
+p <- ggviolin(df, x = "species", y = "n_cells",fill = "species", 
+         palette = c('#3957A6',"#F4A339"),
+         add = "mean_sd", error.plot = "crossbar",add.params = list(fill = "white"))+ Seurat::RotatedAxis() +stat_compare_means(aes(x = "species", y = "n_cells",label = after_stat(p.signif)),comparisons = list(c("human", "macaque")), method = "t.test",  paired = FALSE,hide.ns=TRUE)
+
+fig_dir='~/Desktop/perturb/HM2D/figures/'
+pdf(paste(fig_dir, 'vln-clonesize-hm.pdf',sep=''),width=3, height=5.1)
+print(p)
+dev.off()
+
+```
+
