@@ -1,5 +1,9 @@
 # Dissecting Gene Regulatory Networks Governing Human Cortical Cell Fate
+<<<<<<< HEAD
 Scripts for analyses used in **Dissecting Gene Regulatory Networks Governing Human Cortical Cell Fate**. Contains scripts for analysis, raw imaging manual cell counting data, and the comparative annotation toolkit GTF version of the RheMac10 annotation used for the study. The raw reads for the macaque data, and processed data for both species can be found in https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE284197 (released upon publication). 
+=======
+Scripts for analyses used in [Dissecting Gene Regulatory Networks Governing Human Cortical Cell Fate]. The raw reads for the macaque data, and processed data for both species can be found in https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE284197 (released upon publication). 
+>>>>>>> d2b33f0f14ab95c28a4d51f6f62a5541054b0886
 
 ## Usage
 
