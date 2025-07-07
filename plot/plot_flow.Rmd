@@ -32,55 +32,41 @@ data$Target.Gene <- factor(data$Target.Gene, levels = c('NT','NR2E1','ARX','SOX2
 ```{r p value D7}
 # Filtering by D7
 d7 <- filter(data, Diff == "D7")
-compare_means(KI67 ~ sgRNA, data = d7, paired = FALSE,ref.group = 'NT',method = "t.test")
-compare_means(EOMES ~ sgRNA, data = d7, paired = FALSE,ref.group = 'NT',method = "t.test")
-compare_means(NEUROD2 ~ sgRNA, data = d7, paired = FALSE,ref.group = 'NT',method = "t.test")
-compare_means(DLX2 ~ sgRNA, data = d7, paired = FALSE,ref.group = 'NT',method = "t.test")
+compare_means(KI67 ~ sgRNA, data = d7, paired = FALSE,ref.group = 'NT',method = "wilcox.test")
+compare_means(EOMES ~ sgRNA, data = d7, paired = FALSE,ref.group = 'NT',method = "wilcox.test")
+compare_means(NEUROD2 ~ sgRNA, data = d7, paired = FALSE,ref.group = 'NT',method = "wilcox.test")
+compare_means(DLX2 ~ sgRNA, data = d7, paired = FALSE,ref.group = 'NT',method = "wilcox.test")
+compare_means(SOX2 ~ sgRNA, data = d7, paired = FALSE,ref.group = 'NT',method = "wilcox.test")
 
 
 each.vs.basemean <- list()
 ## p-value (text only) comparing to the null
 each.vs.basemean[['KI67']] <- tibble::tribble(
   ~group1, ~group2, ~p.adj, ~y.position,
-  "all",   "ARX_g2",   "***", 1.2,
-  "all",   "ARX_g1",     "**",   1.2,
-  "all",   "NR2E1_g1",     "***", 1.2,
-  #"all",   "NR2E1_g3",     "ns", 1.2,
-  "all",   "ZNF219_g3",     "****", 1.2,
-  #"all",   "ZNF219_g2",     "ns", 1.2,
-  #"all",   "SOX2_g1",     "ns", 1.4,
-  #"all",   "SOX2_g3",     "ns", 1.4,
+  "all",   "ARX_g2",   "**", 1.2,
+  "all",   "ARX_g1",     "***",   1.2,
+  "all",   "NR2E1_g1",     "**", 1.2,
+  "all",   "ZNF219_g3",     "**", 1.2,
 )
 each.vs.basemean[['EOMES']] <- tibble::tribble(
   ~group1, ~group2, ~p.adj, ~y.position,
-  #"all",   "ARX_g2",   "ns", 1.9,
-  #"all",   "ARX_g1",     "ns",   1.9,
-  #"all",   "NR2E1_g1",     "ns", 1.9,
-  "all",   "NR2E1_g3",     "***", 1.5,
-  #"all",   "ZNF219_g3",     "ns", 1.9,
-  #"all",   "ZNF219_g2",     "ns", 1.9,
-  "all",   "SOX2_g1",     "**", 1.5,
-  "all",   "SOX2_g3",     "***", 1.5,
+  "all",   "ARX_g2",   "**", 1.9,
+  "all",   "NR2E1_g3",     "**", 1.9,
+  "all",   "ZNF219_g3",     "**", 1.9,
 )
 each.vs.basemean[['NEUROD2']] <- tibble::tribble(
   ~group1, ~group2, ~p.adj, ~y.position,
-  #"all",   "ARX_g2",   "ns", 1.9,
-  #"all",   "ARX_g1",     "ns",   1.9,
-  #"all",   "NR2E1_g1",     "ns", 1.9,
   "all",   "NR2E1_g3",     "**", 1.9,
-  #"all",   "ZNF219_g3",     "ns", 1.9,
-  "all",   "ZNF219_g2",     "*", 1.9,
-  "all",   "SOX2_g1",     "**", 1.9,
-  #"all",   "SOX2_g3",     "ns", 1.9,
+  "all",   "ZNF219_g2",     "**", 1.9,
 )
 each.vs.basemean[['DLX2']] <- tibble::tribble(
   ~group1, ~group2, ~p.adj, ~y.position,
-  "all",   "ARX_g2",   "", 2.5,
-  #"all",   "ARX_g1",     "ns",   2.5,
-  #"all",   "NR2E1_g1",     "ns", 2.5,
-  #"all",   "NR2E1_g3",     "ns", 2.5,
-  #"all",   "ZNF219_g3",     "ns", 2.5,
-  #"all",   "ZNF219_g2",     "ns", 2.5,
+  "all",   "ARX_g2",   "", 2.5
+)
+each.vs.basemean[['SOX2']] <- tibble::tribble(
+  ~group1, ~group2, ~p.adj, ~y.position,
+  "all",   "NR2E1_g3",     "**", 1.5,
+  "all",   "ZNF219_g3",     "**", 1.5
 )
 
 ```
@@ -88,17 +74,17 @@ each.vs.basemean[['DLX2']] <- tibble::tribble(
 ```{r p value D4}
 # Filtering by D4
 d4 <- filter(data, Diff == "D4")
-compare_means(KI67 ~ sgRNA, data = d4, paired = FALSE,ref.group = 'NT',method = "t.test")
-compare_means(EOMES ~ sgRNA, data = d4, paired = FALSE,ref.group = 'NT',method = "t.test")
-compare_means(NEUROD2 ~ sgRNA, data = d4, paired = FALSE,ref.group = 'NT',method = "t.test")
-compare_means(DLX2 ~ sgRNA, data = d4, paired = FALSE,ref.group = 'NT',method = "t.test")
+compare_means(KI67 ~ sgRNA, data = d4, paired = FALSE,ref.group = 'NT',method = "wilcox.test")
+compare_means(EOMES ~ sgRNA, data = d4, paired = FALSE,ref.group = 'NT',method = "wilcox.test")
+compare_means(NEUROD2 ~ sgRNA, data = d4, paired = FALSE,ref.group = 'NT',method = "wilcox.test")
+compare_means(DLX2 ~ sgRNA, data = d4, paired = FALSE,ref.group = 'NT',method = "wilcox.test")
 
 
 each.vs.basemean <- list()
 ## p-value (text only) comparing to the null
 each.vs.basemean[['KI67']] <- tibble::tribble(
   ~group1, ~group2, ~p.adj, ~y.position,
-  "all",   "ARX_g1",     "*",   1.2,
+  "all",   "ARX_g1",     "**",   1.2,
   "all",   "ZNF219_g3",     "*", 1.2,
 )
 each.vs.basemean[['EOMES']] <- tibble::tribble(
@@ -112,21 +98,26 @@ each.vs.basemean[['NEUROD2']] <- tibble::tribble(
 )
 each.vs.basemean[['DLX2']] <- tibble::tribble(
   ~group1, ~group2, ~p.adj, ~y.position,
-  "all",   "ZNF219_g3",     "*", 1.2
+  "all",   "ZNF219_g3",     "", 1.2
 )
-
+each.vs.basemean[['SOX2']] <- tibble::tribble(
+  ~group1, ~group2, ~p.adj, ~y.position,
+  "all",   "NR2E1_g3",     "", 1.5,
+)
 
 ```
 
 ```{r p value D2}
 # Filtering by D2
 d2 <- filter(data, Diff == "D2")
-compare_means(KI67 ~ sgRNA, data = d2, paired = FALSE,ref.group = 'NT',method = "t.test")
-compare_means(EOMES ~ sgRNA, data = d2, paired = FALSE,ref.group = 'NT',method = "t.test")
-compare_means(NEUROD2 ~ sgRNA, data = d2, paired = FALSE,ref.group = 'NT',method = "t.test")
-compare_means(DLX2 ~ sgRNA, data = d2, paired = FALSE,ref.group = 'NT',method = "t.test")
-compare_means(SOX2 ~ sgRNA, data = d2, paired = FALSE,ref.group = 'NT',method = "t.test")
+compare_means(KI67 ~ sgRNA, data = d2, paired = FALSE,ref.group = 'NT',method = "wilcox.test")
+compare_means(EOMES ~ sgRNA, data = d2, paired = FALSE,ref.group = 'NT',method = "wilcox.test")
+compare_means(NEUROD2 ~ sgRNA, data = d2, paired = FALSE,ref.group = 'NT',method = "wilcox.test")
+compare_means(DLX2 ~ sgRNA, data = d2, paired = FALSE,ref.group = 'NT',method = "wilcox.test")
+compare_means(SOX2 ~ sgRNA, data = d2, paired = FALSE,ref.group = 'NT',method = "wilcox.test")
 
+each.vs.basemean <- list()
+## p-value (text only) comparing to the null
 each.vs.basemean <- list()
 ## p-value (text only) comparing to the null
 each.vs.basemean[['KI67']] <- tibble::tribble(
@@ -135,11 +126,11 @@ each.vs.basemean[['KI67']] <- tibble::tribble(
 )
 each.vs.basemean[['EOMES']] <- tibble::tribble(
   ~group1, ~group2, ~p.adj, ~y.position,
-  "all",   "NR2E1_g1",     "", 1.2
+  "all",   "ARX_g1",     "*", 1.2
 )
 each.vs.basemean[['NEUROD2']] <- tibble::tribble(
   ~group1, ~group2, ~p.adj, ~y.position,
-  "all",   "ZNF219_g2",     "*", 2.5,
+  "all",   "ZNF219_g2",     "", 2.5,
 )
 each.vs.basemean[['DLX2']] <- tibble::tribble(
   ~group1, ~group2, ~p.adj, ~y.position,
@@ -147,8 +138,8 @@ each.vs.basemean[['DLX2']] <- tibble::tribble(
 )
 each.vs.basemean[['SOX2']] <- tibble::tribble(
   ~group1, ~group2, ~p.adj, ~y.position,
-  "all",   "SOX2_g1",     "**", 1.1,
-  "all",   "SOX2_g3",     "**", 1.1,
+  "all",   "SOX2_g1",     "*", 1.1,
+  "all",   "SOX2_g3",     "*", 1.1,
 )
 
 ```
@@ -185,14 +176,14 @@ d2$Target.Gene <- factor(d2$Target.Gene, c("NT","NR2E1", "ARX", 'SOX2','ZNF219')
 
 myplots <- list()
 for (gene in c('KI67','EOMES','NEUROD2','SOX2','DLX2')){
-  myplots[[gene]] <- ggboxplot(d2, y = gene, x = "Guide",xlab='',
-          fill = "Target.Gene",palette = pal_npg("nrc", alpha = 0.7)(10),
-          add = "dotplot", add.params = list(shape = 21)) + rremove("legend") + rotate_x_text(45) + 
-  #stat_compare_means(comparisons = my_comparisons,label = "p.signif", hide.ns = TRUE, method = "t.test") +
-  geom_hline(yintercept = 1, linetype = "dashed", color = "darkgrey") + add_pvalue(
-        each.vs.basemean[[gene]], label.size = 5,
-        fontface = "bold") +  theme(axis.text.x=element_blank()) + 
-  theme(legend.position="none") 
+    myplots[[gene]] <- ggboxplot(d2, y = gene, x = "Guide",xlab='',
+                                 fill = "Target.Gene",palette = c("#E64B35B2", "#4DBBD5B2", "#00A087B2", "#F39B7FB2" ),
+                                 add = "dotplot", add.params = list(shape = 21,size = 3)) + rremove("legend") + rotate_x_text(45) + 
+        #stat_compare_means(comparisons = my_comparisons,label = "p.signif", hide.ns = TRUE, method = "t.test") +
+        geom_hline(yintercept = 1, linetype = "dashed", color = "darkgrey") + add_pvalue(
+            each.vs.basemean[[gene]], label.size = 5,
+            fontface = "bold") +  theme(axis.text.x=element_blank()) + 
+        theme(legend.position="none") 
 }
 
 fig_dir='~/Desktop/perturb/figures/'
@@ -211,14 +202,14 @@ d4$Guide <- factor(d4$Guide , levels=c("NT_g1", "NT_g2","NR2E1_g1","NR2E1_g3","A
 
 myplots <- list()
 for (gene in c('KI67','EOMES','NEUROD2','SOX2','DLX2')){
-  myplots[[gene]] <- ggboxplot(d4, y = gene, x = "Guide",xlab='',
-          fill = "Target.Gene",palette = c("#E64B35B2", "#4DBBD5B2", "#00A087B2", "#F39B7FB2" ),
-          add = "dotplot", add.params = list(shape = 21)) + rremove("legend") + rotate_x_text(45) + 
-  #stat_compare_means(comparisons = my_comparisons,label = "p.signif", hide.ns = TRUE, method = "t.test") +
-  geom_hline(yintercept = 1, linetype = "dashed", color = "darkgrey") + add_pvalue(
-        each.vs.basemean[[gene]], label.size = 5,
-        fontface = "bold") +  theme(axis.text.x=element_blank()) + 
-  theme(legend.position="none") 
+    myplots[[gene]] <- ggboxplot(d4, y = gene, x = "Guide",xlab='',
+                                 fill = "Target.Gene",palette = c("#E64B35B2", "#4DBBD5B2", "#00A087B2", "#F39B7FB2" ),
+                                 add = "dotplot", add.params = list(shape = 21,size = 3)) + rremove("legend") + rotate_x_text(45) + 
+        #stat_compare_means(comparisons = my_comparisons,label = "p.signif", hide.ns = TRUE, method = "t.test") +
+        geom_hline(yintercept = 1, linetype = "dashed", color = "darkgrey") + add_pvalue(
+            each.vs.basemean[[gene]], label.size = 5,
+            fontface = "bold") +  theme(axis.text.x=element_blank()) + 
+        theme(legend.position="none") 
 }
 
 fig_dir='~/Desktop/perturb/figures/'
@@ -242,8 +233,8 @@ d7$Target.Gene <- factor(d7$Target.Gene, c("NT","NR2E1", "ARX", 'SOX2','ZNF219',
 myplots <- list()
 for (gene in c('KI67','EOMES','NEUROD2','SOX2','DLX2')){
     myplots[[gene]] <- ggboxplot(d7, y = gene, x = "Guide",xlab='',
-                                 fill = "Target.Gene",palette = pal_npg("nrc", alpha = 0.7)(10),
-                                 add = "dotplot", add.params = list(shape = 21)) + rremove("legend") + rotate_x_text(45) + 
+                                 fill = "Target.Gene",palette = c("#E64B35B2", "#4DBBD5B2", "#00A087B2", "#F39B7FB2" ),
+                                 add = "dotplot", add.params = list(shape = 21,size = 3)) + rremove("legend") + rotate_x_text(45) + 
         #stat_compare_means(comparisons = my_comparisons,label = "p.signif", hide.ns = TRUE, method = "t.test") +
         geom_hline(yintercept = 1, linetype = "dashed", color = "darkgrey") + add_pvalue(
             each.vs.basemean[[gene]], label.size = 5,
@@ -256,10 +247,6 @@ pdf(paste(fig_dir, 'Flow-D7.pdf',sep=''),width=4, height=6)
 print(ggarrange(plotlist = myplots, ncol =1))
 dev.off()
 
-fig_dir='~/Desktop/perturb/figures/'
-pdf(paste(fig_dir, 'Flow-SOX2KD.pdf',sep=''),width=4, height=2)
-print(cowplot::plot_grid(p2, p7, labels = c('D2', 'D7'), label_size = 12))
-dev.off()
 
 ```
 

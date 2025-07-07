@@ -38,7 +38,7 @@ library(ggpubr)
 ```
 
 
-```{r fig2}
+```{r fig3}
 fig_dir = '~/Desktop/perturb/HM2DQ-NKS-milo/2D_fig/'
 dir.create(fig_dir, showWarnings = FALSE)
 
@@ -204,7 +204,7 @@ for (gene in genes) {
 ```
 
 
-```{r suppfig5 IN}
+```{r suppfig8 IN}
 fig_dir = '~/Desktop/perturb/HM2DQ-NKS-milo/IN/' 
 dir.create(fig_dir, showWarnings = FALSE)
 
@@ -290,8 +290,7 @@ for (gene in genes) {
 
 
 
-
-```{r fig4 IN milo-H}
+```{r fig5 IN milo-H}
 fig_dir = '~/Desktop/perturb/HM2DQ-NKS-milo/IN_H/' 
 
 
@@ -364,7 +363,7 @@ for (gene in genes) {
 ```
 
 
-```{r fig4 IN milo-Q}
+```{r fig5 IN milo-Q}
 fig_dir = '~/Desktop/perturb/HM2DQ-NKS-milo/IN_Q/' 
 genes = c('SOX2',  'ARX', 'NR2E1', 'ZNF219')
 
@@ -434,4 +433,262 @@ for (gene in genes) {
 ```
 
 
+```{r fig5 IN LMO1}
+fig_dir = '~/Desktop/perturb/HM2DQ-NKS-milo/LMO1/' 
+dir.create(fig_dir, showWarnings = FALSE)
 
+library(zellkonverter)
+library(Seurat)
+
+sourcefile <- file.path('~/Desktop/perturb/LMO1_IN_query.h5ad')
+
+ad <- readH5AD(sourcefile,X_name='counts', reader = 'R')
+ad@assays@data$counts <- ad@assays@data$X
+ad@assays@data$X <- NULL
+print(head(ad@assays@data$counts))
+
+#for NKS assignment
+ad$Gene_target <- ad$gene_NKS
+ad$gene_IDs <- ad$gene_NKS
+ad$num_sg_IDs <- ad$num_guide_IDs 
+ad$sg_IDs <- ad$sgRNA_NKS 
+
+ad$Gene_target <- gsub(",non-targeting", "", ad$Gene_target)
+ad$Gene_target <- gsub("non-targeting,", "", ad$Gene_target)
+table(ad$Gene_target)
+ad$pertubation <- ifelse(ad$Gene_target == 'non-targeting',"NT","Perturbed")
+ad$leiden <- ad$predictions
+
+ad <- subset(ad, , ad$species != 'macaque')
+ad$individual <- droplevels(ad$individual)
+ad$batch_name <- droplevels(ad$batch_name)
+
+set.seed(12345)
+NT <- subset(ad, ,Gene_target=="non-targeting")
+NT$pertubation <- 'NT'
+sKD <- subset(ad, ,Gene_target=="ARX")
+sKD$pertubation <- 'ARX'
+Perturbed <- subset(ad, ,Gene_target %in% c("ARX,LMO1", "ARX,LMO1,NT"))
+Perturbed$pertubation <- 'dKD'
+cells_NT <- sample(colnames(NT),500, replace = FALSE)
+cells_s <- sample(colnames(sKD),500, replace = FALSE)
+cells_P <- sample(colnames(Perturbed),400, replace = FALSE)
+milo <- cbind(NT[,cells_NT], sKD[,cells_s], Perturbed[,cells_P])
+milo$pertubation <- as.factor(milo$pertubation)
+milo$pertubation <- factor(milo$pertubation, levels = c('NT','ARX','dKD'))
+milo <- Milo(milo)
+milo <- buildGraph(milo, k = 30, d = 10, reduced.dim = "X_scANVI")
+milo <- makeNhoods(milo, prop = 0.1, k = 30, d=10, refined = TRUE, reduced_dims = "X_scANVI")
+plotNhoodSizeHist(milo)
+milo@colData$stage <- gsub("#.*", "", milo@colData$individual)
+milo@colData$sex <- gsub(".*-", "",milo@colData$individual)
+milo@colData$sample <- paste(milo@colData$individual,milo@colData$Gene_target,milo@colData$batch_name,milo@colData$stage,sep='-')
+milo@colData$individual <- droplevels(milo@colData$individual)
+milo@colData$batch_name <- droplevels(milo@colData$batch_name)
+milo <- countCells(milo, meta.data = as.data.frame(colData(milo)), sample="sample")
+head(nhoodCounts(milo))
+design <- data.frame(colData(milo))[,c("sample", "pertubation","batch_name","stage")]
+design <- distinct(design)
+rownames(design) <- design$sample
+design
+
+milo <- calcNhoodDistance(milo, d=10, reduced.dim = "X_scANVI")
+umap_pl <- plotReducedDim(milo, dimred = "X_umap", colour_by="pertubation",  # text_by = "predictions", 
+                          text_size = 3, point_size=0.5) + guides(fill="none")
+
+
+contrast.1 <- c("pertubationARX - pertubationNT") 
+da_results <- testNhoods(milo, design = ~ 0 + pertubation, design.df = design, model.contrasts = contrast.1,
+                         fdr.weighting="graph-overlap", norm.method="TMM", reduced.dim = 'X_scANVI')
+milo <- buildNhoodGraph(milo)
+
+p1 <- plotNhoodGraphDA(milo, da_results, layout="X_umap",alpha=0.05)+ scale_fill_gradientn(limits=c(-6,6),oob=scales::squish, colours = c('#709AE1', '#FFFFFF','#FD7446' ),rescaler = ~ scales::rescale_mid(.x, mid = 0)) +
+    ggtitle('ARX versus NT') +  theme(plot.title = element_text(size = 10))
+
+da_results <- annotateNhoods(milo, da_results, coldata_col = "predictions")
+da_results$celltype <- ifelse(da_results$predictions_fraction < 0.7, "Mixed", da_results$predictions)
+p4 <- plotDAbeeswarm(da_results, group.by = "predictions", alpha = 0.05) +
+    ggtitle('ARX versus NT')+  theme(plot.title = element_text(size = 12),text=element_text(size=10))+ylim(-6,6)+ scale_color_gradientn(limits=c(-6,6),oob=scales::squish,  colours = c('#709AE1', '#FFFFFF','#FD7446' ), rescaler = ~ scales::rescale_mid(.x, mid = 0))
+
+contrast.1 <- c("pertubationdKD - pertubationARX") 
+da_results <- testNhoods(milo, design = ~ 0 + pertubation, design.df = design, model.contrasts = contrast.1,
+                         fdr.weighting="graph-overlap", norm.method="TMM", reduced.dim = 'X_scANVI')
+milo <- buildNhoodGraph(milo)
+
+p2 <- plotNhoodGraphDA(milo, da_results, layout="X_umap",alpha=0.05)+ scale_fill_gradientn(limits=c(-6,6),oob=scales::squish, colours = c('#709AE1', '#FFFFFF','#FD7446' ),rescaler = ~ scales::rescale_mid(.x, mid = 0)) +
+    ggtitle('dKD versus ARX') +  theme(plot.title = element_text(size = 10))
+
+da_results <- annotateNhoods(milo, da_results, coldata_col = "predictions")
+da_results$celltype <- ifelse(da_results$predictions_fraction < 0.7, "Mixed", da_results$predictions)
+p5 <- plotDAbeeswarm(da_results, group.by = "predictions", alpha = 0.05) +
+    ggtitle('dKD versus ARX')+  theme(plot.title = element_text(size = 12),text=element_text(size=10))+ylim(-6,6)+ scale_color_gradientn(limits=c(-6,6),oob=scales::squish,  colours = c('#709AE1', '#FFFFFF','#FD7446' ), rescaler = ~ scales::rescale_mid(.x, mid = 0))
+
+contrast.1 <- c("pertubationdKD - pertubationNT") 
+da_results <- testNhoods(milo, design = ~ 0 + pertubation, design.df = design, model.contrasts = contrast.1,
+                         fdr.weighting="graph-overlap", norm.method="TMM", reduced.dim = 'X_scANVI')
+milo <- buildNhoodGraph(milo)
+
+p3 <- plotNhoodGraphDA(milo, da_results, layout="X_umap",alpha=0.05)+ scale_fill_gradientn(limits=c(-6,6),oob=scales::squish, colours = c('#709AE1', '#FFFFFF','#FD7446' ),rescaler = ~ scales::rescale_mid(.x, mid = 0)) +
+    ggtitle('dKD versus NT') +  theme(plot.title = element_text(size = 10))
+
+pdf(paste(fig_dir, 'LMO1.pdf',sep=''),width=4.5, height=4.5)
+ggarrange(umap_pl+ NoAxes(), p1,p2,p3, common.legend = TRUE)
+dev.off()
+
+pdf(paste(fig_dir, 'LMO1.beeswarm.pdf',sep=''),width=6, height=2.5)
+print((p4+xlab(''))+(p5+xlab('')+theme(axis.text.y = element_blank())))
+dev.off()
+
+```
+
+
+```{r supp fig 9 slice}
+sourcefile <- file.path('~/Desktop/query_Slice.IN.h5ad')
+fig_dir = '~/Desktop/perturb/HM2DQ-NKS-milo/IN_Slice/' 
+
+genes <- c('ARX','SOX2')
+
+ad <- readH5AD(sourcefile,X_name='counts', reader = 'R')
+ad@assays@data$counts <- ad@assays@data$X
+ad@assays@data$X <- NULL
+print(head(ad@assays@data$counts))
+
+#for NKS assignment
+ad$Gene_target <- ad$gene_NKS
+ad$gene_IDs <- ad$gene_NKS
+ad$num_sg_IDs <- ad$num_guide_IDs 
+ad$sg_IDs <- ad$sgRNA_NKS 
+
+
+ad$Gene_target <- gsub(",non-targeting", "", ad$Gene_target)
+ad$Gene_target <- gsub("non-targeting,", "", ad$Gene_target)
+table(ad$Gene_target)
+ad$pertubation <- ifelse(ad$Gene_target == 'non-targeting',"NT","Perturbed")
+ad$leiden <- ad$predictions
+
+ad <- subset(ad, , ad$species == 'human')
+ad$individual <- droplevels(ad$individual)
+ad$batch_name <- droplevels(ad$batch_name)
+
+ad$leiden <- ad$supervised_name
+set.seed(12345)
+for (gene in genes) {
+    NT <- subset(ad, ,Gene_target=="non-targeting")
+    Perturbed <- subset(ad, ,Gene_target==gene)
+    cells_NT <- sample(colnames(NT),147, replace = FALSE)
+    cells_P <- sample(colnames(Perturbed),250, replace = FALSE)
+    milo <- cbind(NT[,cells_NT], Perturbed[,cells_P])
+    milo <- Milo(milo)
+    milo <- buildGraph(milo, k = 30, d = 10, reduced.dim = "X_pca")
+    milo <- makeNhoods(milo, prop = 0.1, k = 30, d=10, refined = TRUE, reduced_dims = "X_pca")
+    plotNhoodSizeHist(milo)
+    milo@colData$stage <- gsub("#.*", "", milo@colData$individual)
+    milo@colData$sex <- gsub(".*-", "",milo@colData$individual)
+    milo@colData$sample <- paste(milo@colData$individual,milo@colData$Gene_target,milo@colData$batch_name,milo@colData$stage,sep='-')
+    milo@colData$individual <- droplevels(milo@colData$individual)
+    milo@colData$batch_name <- droplevels(milo@colData$batch_name)
+    milo <- countCells(milo, meta.data = as.data.frame(colData(milo)), sample="sample")
+    head(nhoodCounts(milo))
+    design <- data.frame(colData(milo))[,c("sample", "pertubation","batch_name","stage")]
+    design <- distinct(design)
+    rownames(design) <- design$sample
+    design
+    milo <- calcNhoodDistance(milo, d=10, reduced.dim = "X_pca")
+    da_results <- testNhoods(milo, design = ~  batch_name + stage + pertubation, design.df = design, reduced.dim="X_pca")
+    head(da_results)
+    da_results %>%arrange(SpatialFDR) %>%head() 
+    plotNhoodMA(da_results)
+    ggplot(da_results, aes(PValue)) + geom_histogram(bins=50)
+    ggplot(da_results, aes(logFC, -log10(SpatialFDR))) + geom_point() + geom_hline(yintercept = 1) ## Mark significance threshold (10% FDR)
+    milo <- buildNhoodGraph(milo)
+    
+    ## Plot single-cell UMAP
+    umap_pl <- plotReducedDim(milo, dimred = "X_umap", colour_by="pertubation",  text_by = "leiden", 
+                              text_size = 3, point_size=0.5) + guides(fill="none")
+    ## Plot neighbourhood graph
+    nh_graph_pl <- plotNhoodGraphDA(milo, da_results, layout="X_umap",alpha=0.1)+ scale_fill_gradientn(limits=c(-2,2),oob=scales::squish,
+                                                                                                       colours = c('#709AE1', '#FFFFFF','#FD7446' ),
+                                                                                                       #colours = c( '#316dd4', '#FFFFFF', '#f43f03'),
+                                                                                                       rescaler = ~ scales::rescale_mid(.x, mid = 0)) 
+    pdf(paste(fig_dir, gene,'.pdf',sep=''),width=4, height=2.2)
+    print((umap_pl+ Seurat::NoLegend())  + (nh_graph_pl+ Seurat::NoLegend()) + plot_layout(guides="collect")+
+              labs(title = paste(gene,"KD"))+ theme(plot.title = element_text(size = 10)))
+    dev.off()
+    #plot legend
+    pdf(paste(fig_dir, gene,'-legend.pdf',sep=''),width=20, height=10)
+    print(ggarrange(umap_pl+ NoAxes(),nh_graph_pl, ncol = 2, nrow = 1)+
+              labs(title = paste(gene,"KD"))+ theme(plot.title = element_text(size = 12) ) )
+    dev.off()
+}
+```
+
+
+
+```{r downsample}
+fig_dir = '~/Desktop/perturb/HM2DQ-NKS-milo/2D_ds/'
+dir.create(fig_dir, showWarnings = FALSE)
+
+set.seed(123)
+gene <- 'BHLHE22'
+gene <- 'POU2F1'
+gene <- 'ARX'
+gene <- 'NR2E1'
+
+myplots <- list()
+for (n in c(200,300,400,500,600)) {
+    NT <- subset(ad, ,Gene_target=="non-targeting")
+    Perturbed <- subset(ad, ,Gene_target==gene)
+    cells_NT <- sample(colnames(NT),n*1.4, replace = FALSE)
+    cells_P <- sample(colnames(Perturbed),n, replace = FALSE)
+    milo <- cbind(NT[,cells_NT], Perturbed[,cells_P])
+    
+    milo <- Milo(milo)
+    milo <- buildGraph(milo, k = 30, d = 10, reduced.dim = "X_scANVI")
+    milo <- makeNhoods(milo, prop = 0.1, k = 30, d=10, refined = TRUE, reduced_dims = "X_scANVI")
+    plotNhoodSizeHist(milo)
+    milo@colData$stage <- gsub("#.*", "", milo@colData$individual)
+    milo@colData$sex <- gsub(".*-", "",milo@colData$individual)
+    milo@colData$sample <- paste(milo@colData$individual,milo@colData$Gene_target,milo@colData$stage,milo@colData$sex, milo@colData$batch_name,sep='-')
+    milo <- countCells(milo, meta.data = as.data.frame(colData(milo)), sample="sample")
+    head(nhoodCounts(milo))
+    design <- data.frame(colData(milo))[,c("sample", "pertubation","individual","stage","sex","batch_name")]
+    design <- distinct(design)
+    rownames(design) <- design$sample
+    design
+    milo <- calcNhoodDistance(milo, d=10, reduced.dim = "X_scANVI")
+    da_results <- testNhoods(milo, design = ~ stage + sex + batch_name + pertubation, design.df = design, reduced.dim="X_scANVI")
+    head(da_results)
+    da_results %>%arrange(SpatialFDR) %>%head() 
+    plotNhoodMA(da_results)
+    ggplot(da_results, aes(PValue)) + geom_histogram(bins=50)
+    ggplot(da_results, aes(logFC, -log10(SpatialFDR))) + geom_point() + geom_hline(yintercept = 1) ## Mark significance threshold (10% FDR)
+    milo <- buildNhoodGraph(milo)
+    ## Plot single-cell UMAP
+    umap_pl <- plotReducedDim(milo, dimred = "X_umap", colour_by="pertubation", text_by = "leiden", 
+                              text_size = 3, point_size=0.5) + guides(fill="none")
+    ## Plot neighbourhood graph
+    nh_graph_pl <- plotNhoodGraphDA(milo, da_results, layout="X_umap",alpha=0.1) + scale_fill_gradientn(limits=c(-2,2),oob=scales::squish,
+                                                                                                        colours = c('#709AE1', '#FFFFFF','#FD7446' ),
+                                                                                                        #colours = c( '#316dd4', '#FFFFFF', '#f43f03'),
+                                                                                                        rescaler = ~ scales::rescale_mid(.x, mid = 0))
+    da_results <- annotateNhoods(milo, da_results, coldata_col = "leiden")
+    head(da_results)
+    ggplot(da_results, aes(leiden_fraction)) + geom_histogram(bins=50)
+    da_results$leiden <- ifelse(da_results$leiden_fraction < 0.6, "Mixed", da_results$leiden)
+    da_results$leiden <- as.factor(da_results$leiden)
+    da_results$leiden <- factor(da_results$leiden, levels = c(sort(levels(da_results$leiden), decreasing=T)))
+    #create beeswarm plot
+    #beeswarm_pl <- plotDAbeeswarm(da_results, group.by = "leiden")
+    
+    
+    myplots[[n]] <- (nh_graph_pl+NoLegend()+
+              labs(title = paste(gene,"KD,", n, 'cells'))+ theme(plot.title = element_text(size = 12) ) )
+    
+    
+}
+
+pdf(paste(fig_dir, gene,'.pdf',sep=''),width=10, height=2)
+ggpubr::ggarrange(plotlist = list(myplots[[200]],myplots[[300]],myplots[[400]],myplots[[500]],myplots[[600]]), ncol = 5, nrow = 1)
+dev.off()
+    
+```

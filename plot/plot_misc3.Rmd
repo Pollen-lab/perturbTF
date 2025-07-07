@@ -1,0 +1,385 @@
+---
+title: "Plotting for lineage tracing"
+output: html_notebook
+---
+
+
+```{r clonal distribution across perturbation}
+library(ggpubr)
+library(ggplot2)
+library(dplyr)
+library(ggsci)
+library(tidyverse)
+library(rstatix)
+library(broom)
+library(ggprism)
+
+df <- read.csv('~/Desktop/perturb/HM2D/scLiTr.HM2D.csv')
+#df <- read.csv('~/Desktop/perturb/HM2D/scLiTr.HM2D.macaque.csv')
+df <- filter(df, gene_NKS != 'WT')
+df <- filter(df, gene_NKS %in% c('non-targeting','NR2E1','ARX','SOX2','ZNF219','NEUROD2'))%>%
+  mutate(gene_NKS = replace(gene_NKS, gene_NKS == 'non-targeting', "NT"))
+#human
+df <- filter(df, batch %in% c('GW17#136-F','GW18#183-M','GW19#153-F', 'GW22#147-M','GW16#161-F','GW19#139-M','GW21#143-F','GW21#154-F'))
+  
+
+#normalize count between individuals
+df <- df %>%
+  group_by(batch, gene_NKS) %>%
+  mutate(sum = sum(count)) %>%
+  ungroup() %>%
+  mutate(
+    norm = count / sum,
+    stage = sub("#.*", "", batch),
+    stage = substr(batch, start = 3 , stop = 4 ) ,
+    ID = substr(batch, start = 5 , stop = 8 ) ,
+    group = ifelse(stage < 20, 'early(16-19)','late(21-22)') 
+  )
+
+#scale based on non-targeting
+df <- df %>%
+  group_by(Clonal.cluster) %>%
+  mutate(
+    NT = mean(norm[gene_NKS == 'NT'], na.rm = TRUE),
+    scaled = (norm - NT)
+  ) %>%
+  ungroup()
+
+df$gene_NKS <- as.factor(df$gene_NKS)
+df$gene_NKS <- factor(df$gene_NKS, levels = c('NT','NR2E1','ARX','SOX2','ZNF219','NEUROD2'))
+
+df_p_val <- df %>%
+    rstatix::group_by(Clonal.cluster) %>%
+    rstatix::t_test(norm ~ gene_NKS, paired = TRUE, ref.group = 'NT') %>%
+    rstatix::add_significance(p.col = "p") %>% 
+    rstatix::add_xy_position(x = "gene_NKS", dodge = 0)  %>%
+    filter(p.signif != 'ns') %>% 
+    mutate(y.position = y.position -0.12)
+
+p <- ggbarplot(df, 
+          x = "gene_NKS", y = "norm",  color = "black", fill= 'gene_NKS', ylab='Fraction',xlab = '',
+          add = c("mean_se", "jitter"), add.params = list(color = "stage" , shape = 19),
+          palette =pal_npg("nrc", alpha = 0.7)(10),
+          error.plot = "upper_errorbar",
+          position = position_dodge(),facet.by = 'Clonal.cluster',scales="free_y") + Seurat::RotatedAxis() + # Add global p-value
+    add_pvalue(df_p_val, 
+               #x = "group2",
+               label = "p.signif", label.size = 6,
+               tip.length = 0) #+  #heme(axis.text.x=element_blank())
+
+fig_dir='~/Desktop/perturb/HM2D/figures/'
+pdf(paste(fig_dir, 'scLiTr-human.pdf',sep=''),width=8, height=6)
+print(p+Seurat::NoLegend())
+dev.off()
+
+pdf(paste(fig_dir, 'scLiTr-human-legend.pdf',sep=''),width=12, height=2)
+print(as_ggplot(get_legend(p)))
+dev.off()
+
+```
+
+```{r boxplot Fig.3g}
+df$perturbation <- ifelse(df$gene_NKS == 'NT', 'NT', 'Perturbed')
+df$perturbation <- as.factor(df$perturbation)
+myplots <- list()
+for (gene in  c('NR2E1','ARX','SOX2','ZNF219','NEUROD2')){
+    myplots[[gene]] <- ggpaired(filter(df,   Clonal.cluster %in% c('EN-biased','EN/IN-biased','IN-biased') & gene_NKS %in% c('NT',gene)), x = "perturbation", y = "norm",facet.by = 'Clonal.cluster',fill  = "perturbation", palette =c( "#E64B35B2","#4DBBD5B2" ),#pal_npg("nrc", alpha = 0.7)(10),
+                                add = "dotplot")+NoLegend()+RotatedAxis()+xlab('')+ylab('fraction')+ ylim(0,0.9)+
+        stat_compare_means(comparisons = list( c("NT", 'Perturbed')),label = "p.signif", hide.ns = TRUE,  method = "wilcox.test", ref.group = "NT", paired = TRUE) +
+        theme(strip.background = element_rect(colour="black", fill="white", 
+                                              size=1.5, linetype="solid"))+ggtitle(gene)+ theme(axis.text.x=element_blank(),plot.title = element_text(hjust = 0.5))
+}
+
+fig_dir='~/Desktop/perturb/HM2D/figures/'
+pdf(paste(fig_dir, 'scLiTr-human-box.pdf',sep=''),width=14, height=2.3)
+myplots$NR2E1+NoLegend()+myplots$ARX+NoLegend()+ylab('')+myplots$ZNF219+ ylab('')+theme(legend.position = "right")
+dev.off()
+```
+
+
+```{r scLiTr clone heatmap}
+library(tidyr)
+library(dplyr)
+library(ComplexHeatmap)
+library(colorRamp2)
+col_fun = colorRamp2(c(-0.2,0, 0.2), c('#316dd4', '#FFFFFF', '#f43f03'))
+
+reshaped_df <- df %>%
+  dplyr::select(Clonal.cluster, gene_NKS, scaled) %>%
+  group_by(Clonal.cluster, gene_NKS) %>%
+  summarise(scaled = mean(scaled, na.rm = TRUE), .groups = "drop") %>%
+  pivot_wider(names_from = gene_NKS, values_from = scaled)
+
+reshaped_df <- as.data.frame(reshaped_df)
+rownames(reshaped_df) <- reshaped_df$Clonal.cluster
+reshaped_df$Clonal.cluster <- NULL
+reshaped_df$NT <- NULL
+
+df_p_val <- df %>%
+    rstatix::group_by(Clonal.cluster) %>%
+    rstatix::t_test(norm ~ gene_NKS, paired = TRUE, ref.group = 'NT') %>%
+    rstatix::add_significance(p.col = "p") %>% 
+    dplyr::select(Clonal.cluster, group2, p) %>%
+    pivot_wider(names_from = group2, values_from = p, values_fill = 1) %>%
+    dplyr::select(-Clonal.cluster) %>%
+    mutate(across(everything(), ~ ifelse(is.nan(.), 1, .)))
+
+ht <- Heatmap(as.data.frame(reshaped_df),name = "Ratio", col = col_fun,
+        cluster_rows = FALSE,cluster_columns = FALSE, column_title = "Human",
+        #column_labels = as.expression(lapply(colnames(reshaped_df), function(a) bquote(italic(.(a))))),
+        border_gp = gpar(col = "black", lty = 2), cell_fun = function(j, i, x, y, w, h, fill) {
+    if(df_p_val[i, j] < 0.001) {
+        grid.text("***", x, y)
+    } else if(df_p_val[i, j] < 0.01) {
+        grid.text("**", x, y)
+    } else if(df_p_val[i, j] < 0.05) {
+        grid.text("*", x, y)
+    } else if(df_p_val[i, j] < 0.1) {
+        grid.text("•", x, y)
+    }
+})
+
+pdf(paste(fig_dir, 'scLiTr.heatmap.pdf',sep=''),width=2, height=3)
+print(ht)
+dev.off()
+
+
+```
+
+
+
+```{r clonal distribution across stages}
+df <- read.csv('~/Desktop/perturb/HM2D/scLiTr.HM2D.csv')
+df <- filter(df, gene_NKS != 'WT')
+df <- filter(df, gene_NKS %in% c('non-targeting','NR2E1','ARX','SOX2','ZNF219','NEUROD2'))%>%
+    mutate(gene_NKS = replace(gene_NKS, gene_NKS == 'non-targeting', "NT"),
+           stage = sub("#.*", "", batch))
+df$Clonal.cluster <- factor(df$Clonal.cluster, levels = c("RG/Astro-biased", "EN-biased", "EN/IN-biased", 'IN-biased',"Oligo-biased"))
+levels(df$Clonal.cluster)
+
+#human
+#df <- filter(df, batch %in% c('GW17#136-F','GW18#183-M','GW19#153-F', 'GW22#147-M'))
+df <- filter(df, batch %in% c('GW17#136-F','GW18#183-M','GW19#153-F', 'GW22#147-M','GW16#161-F','GW19#139-M','GW21#143-F','GW21#154-F'))
+
+myplots <- list()
+for (gene in c('NT','NR2E1','ARX','SOX2','ZNF219','NEUROD2')) {
+    sub <- df %>% filter(gene_NKS == gene) %>% 
+        group_by(stage,Clonal.cluster) %>% 
+        summarise(sum_count=sum(count),
+                  .groups = 'drop') %>%
+        group_by(stage) %>%
+        mutate(total_count = sum(sum_count)) %>%
+        ungroup() %>%
+        mutate(
+            percentage = sum_count/total_count * 100
+            )
+    #sub$stage <- paste(sub$stage, sub$area,sep='-')
+    myplots[[gene]] <- ggplot(sub, aes(x=stage, y=percentage, fill=Clonal.cluster))+
+        geom_flow(aes(alluvium = Clonal.cluster), alpha= .5, color = "black",
+                  curve_type = "linear", 
+                  width = .5) +
+        geom_col(width = .5, color = "black") +
+        scale_fill_viridis(option = "B", discrete = T) + #scale_fill_cosmic("signature_substitutions")+
+        scale_y_continuous(NULL, expand = c(0,0)) +
+        cowplot::theme_minimal_hgrid() +
+        theme(panel.grid.major = element_blank() 
+              #axis.text.y = element_blank(), 
+              #axis.ticks.y = element_blank()
+        ) + xlab("")+ylab("")+
+        ggtitle(gene) + Seurat::NoLegend()+RotatedAxis()
+}
+fig_dir='~/Desktop/perturb/HM2D/figures/'
+pdf(paste(fig_dir, 'barplot-stage-human_condition.pdf',sep=''),width=16, height=2.5)
+print(ggarrange(plotlist = myplots, ncol = 6, nrow = 1))
+dev.off()
+```
+
+
+
+```{r}
+library(UpSetR)
+library(dittoSeq)
+library(wesanderson)
+names(wes_palettes)
+library("viridis") 
+library(RColorBrewer)
+library(zellkonverter)
+library(Seurat)
+library(cowplot)
+library(dplyr)
+library(ComplexHeatmap)
+
+dir = '~/Desktop/'
+#dir = '~/Desktop/perturb/HM2D/'
+setwd(dir)
+
+sourcefile <- file.path(dir, 'HM2D_scLiTr.h5ad') 
+ad <- readH5AD(sourcefile,X_name='counts')
+ad$stage <- sub("#.*", "", ad$individual)
+ad$sex <- sub(".*-", "", ad$individual)
+ad$unique_clone <- paste0(ad$clone_barcode,ad$individual)
+ad <- subset(ad, , clone_barcode != 'nan')
+#ad <- subset(ad, , class != 'Microglia')
+#ad <- subset(ad, , class != 'Technical')
+#ad$class <- droplevels(ad$class)
+
+#ad <- subset(ad,,ad$gene_NKS == 'non-targeting')
+
+# Plot the histogram for unique clones with total_count > 2
+#remove clones that have conflicted guide assignments
+df <- as_tibble(ad@colData) %>%
+  group_by(unique_clone, sgRNA) %>%
+  summarise(count = n(), .groups = "drop") %>%
+  filter(count != 0) %>%
+  group_by(unique_clone) %>%
+  mutate(
+    total_count = sum(count),
+    percentage = (count / total_count) * 100,
+    max_percentage = max(percentage)
+  ) %>%
+  ungroup() %>%
+  arrange(desc(max_percentage)) %>%
+  distinct(unique_clone, .keep_all = TRUE) #%>%
+  #filter(total_count > 2)
+
+p1 <- gghistogram(df, x = "total_count", fill = "black",xlab = 'Cell count per clone',ylab = 'clone count',
+            #add = "mean", #rug = TRUE,
+            title = 'Clone size distribution')+scale_x_continuous(breaks = get_breaks(n = 10))+ yscale("log10", .format = TRUE)
+
+p2 <- gghistogram(df, x = "max_percentage", fill = "black",xlab = '%sgRNA in each clone',ylab ='clone count',
+            add = "mean", #rug = TRUE,
+            title = 'Max %sgRNA per clone')+scale_x_continuous(breaks = get_breaks(n = 10))
+
+fig_dir = '~/Desktop/perturb/HM2D/figures/'
+pdf(paste(fig_dir, 'STICR.guide.histogram.pdf',sep=''),width=4, height=4)
+print(ggarrange(p1,p2, ncol=1))
+dev.off()
+
+
+#remove clones that have conflicted guide assignments
+df <- as_tibble(ad@colData) %>%
+  group_by(unique_clone, sgRNA) %>%
+  summarise(count = n(), .groups = "drop") %>%
+  filter(count != 0) %>%
+  group_by(unique_clone) %>%
+  mutate(
+    total_count = sum(count),
+    percentage = (count / total_count) * 100,
+    max_percentage = max(percentage)
+  ) %>%
+  ungroup() %>%
+  arrange(desc(max_percentage)) %>%
+  distinct(unique_clone, .keep_all = TRUE) %>%
+  filter(max_percentage == 100) %>%
+  filter(total_count > 2) 
+
+ad <- subset(ad, , unique_clone %in% df$unique_clone)
+
+#for class
+df_tmp <- subset(ad, ,species == 'human')@colData
+df_tmp$unique_clone <- as.character(df_tmp$unique_clone)
+df_tmp$class <- as.character(df_tmp$class)
+df_tmp <- split(df_tmp$unique_clone, df_tmp$class)
+df_tmp <- lapply(df_tmp, unique)
+
+#for INs
+df_tmp <- subset(ad, ,species == 'human')@colData
+df_tmp$unique_clone <- as.character(df_tmp$unique_clone)
+df_tmp$class <- as.character(df_tmp$class)
+df_tmp$predictions_IN <- as.character(df_tmp$predictions_IN)
+df_tmp <- as_tibble(df_tmp)  %>% mutate(predictions_IN = replace(predictions_IN, is.na(predictions_IN) , df_tmp$class))
+df_tmp <- split(df_tmp$unique_clone, df_tmp$predictions_IN)
+df_tmp <- lapply(df_tmp, unique)
+
+#upset plot
+m = make_comb_mat(df_tmp, mode = "intersect")
+m = m[comb_degree(m) >= 2]
+ss = set_size(m)
+cs = comb_size(m)
+p <- UpSet(m,
+      set_order = order(ss),
+      comb_order = order(comb_degree(m), -cs)
+      )
+
+fig_dir='~/Desktop/perturb/HM2D/figures/'
+pdf(paste(fig_dir, 'upset-human.pdf',sep=''),width=4, height=2.6)
+print(p)
+dev.off()
+
+
+#dittoseq barplot for individual clones
+myplots <- list()
+for (cluster in c('EN-biased','IN-biased','IN/EN-biased','RG/Astro-biased','Oligo-biased')){
+  myplots[[cluster]] <- dittoBarPlot(subset(ad,,ad$Clonal.cluster == cluster), retain.factor.levels = TRUE,
+             var='class', group.by = 'unique_clone',xlab = '',main = cluster,ylab='Fraction',
+             color.panel = brewer.pal(n=6,"Set3"),
+             scale = "percent")+ theme(axis.text.x=element_blank()) 
+}
+
+
+pdf(paste(fig_dir, 'barplot-cloneclass.pdf',sep=''),width=8, height=8)
+ggpubr::ggarrange(plotlist = myplots, ncol = 1, nrow = 5)
+dev.off()
+
+pdf(paste(fig_dir, 'barplot-cloneclass-legend.pdf',sep=''),width=8, height=8)
+dittoBarPlot(subset(ad,,ad$Clonal.cluster == cluster), retain.factor.levels = TRUE,
+             var='class', group.by = 'unique_clone',xlab = '',main = cluster,ylab='Fraction',
+             color.panel = brewer.pal(n=6,"Set3"),
+             scale = "percent")+ theme(axis.text.x=element_blank())
+dev.off()
+
+
+```
+
+```{r clone size (>3)}
+library(ggpubr)
+library(ggplot2)
+library(dplyr)
+library(ggalluvial)
+library(ggsci)
+library(viridis)
+
+df <- read.csv('~/Desktop/perturb/HM2D/scLiTr.obs.csv')
+df$gene_NKS <- as.factor(df$gene_NKS)
+df$gene_NKS <- factor(df$gene_NKS, levels = c('non-targeting','NR2E1','ARX','SOX2','ZNF219','NEUROD2'))
+
+#remove clones w conflicted sgRNA assignment
+df <- filter(df, X %in% unique(ad$unique_clone))
+
+#human
+df <- filter(df, batch %in% c('GW17#136-F','GW18#183-M','GW19#153-F', 'GW22#147-M','GW16#161-F','GW19#139-M','GW21#143-F','GW21#154-F'))
+p <- ggviolin(df, x = "gene_NKS", y = "n_cells",fill = "gene_NKS", 
+         palette = pal_npg("nrc", alpha = 0.7)(10),xlab='',
+         add = "mean_sd", error.plot = "crossbar",add.params = list(fill = "white"))+stat_compare_means(aes(x = "gene_NKS", y = "n_cells",label = after_stat(p.signif)),comparisons = list(c("ARX", "non-targeting")), method = "t.test",  paired = FALSE,hide.ns=TRUE) + 
+  Seurat::RotatedAxis() 
+
+fig_dir='~/Desktop/perturb/HM2D/figures/'
+pdf(paste(fig_dir, 'vln-clonesize-human.pdf',sep=''),width=6, height=5.1)
+print(p)
+dev.off()
+
+
+#macaque
+df <- filter(df, batch %in% c('E75#14-F','E80#12-M','E80#19-M','E60#16-F'))
+p <- ggviolin(df, x = "gene_NKS", y = "n_cells",fill = "gene_NKS", 
+         palette = pal_npg("nrc", alpha = 0.7)(10), xlab='',
+         add = "mean_sd", error.plot = "crossbar",add.params = list(fill = "white"))+ Seurat::RotatedAxis() + ylim(0,50)
+
+fig_dir='~/Desktop/perturb/HM2D/figures/'
+pdf(paste(fig_dir, 'vln-clonesize-macaque.pdf',sep=''),width=6, height=5.1)
+print(p)
+dev.off()
+
+
+#human versus macaque
+p <- ggviolin(df, x = "species", y = "n_cells",fill = "species", 
+         palette = c('#3957A6',"#F4A339"),
+         add = "mean_sd", error.plot = "crossbar",add.params = list(fill = "white"))+ Seurat::RotatedAxis() +stat_compare_means(aes(x = "species", y = "n_cells",label = after_stat(p.signif)),comparisons = list(c("human", "macaque")), method = "t.test",  paired = FALSE,hide.ns=TRUE)
+
+fig_dir='~/Desktop/perturb/HM2D/figures/'
+pdf(paste(fig_dir, 'vln-clonesize-hm.pdf',sep=''),width=3, height=5.1)
+print(p)
+dev.off()
+
+```
+

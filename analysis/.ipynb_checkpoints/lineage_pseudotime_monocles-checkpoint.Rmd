@@ -1,0 +1,302 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+library(zellkonverter)
+library(monocle3)
+library(Seurat)
+library(SeuratWrappers)
+library(patchwork)
+library(dplyr)
+library(dittoSeq)
+library(cowplot)
+library(ggpubr)
+library(ggsci)
+set.seed(1234)
+
+library(dplyr)
+library(ggplot2)
+library(ggprism)
+library(ggbeeswarm)
+library(rstatix)
+library(ggpubr)
+```
+
+
+```{r}
+fig_dir <- "~/Desktop/perturb/HM2D/figures/"
+
+sourcefile <- file.path('~/Desktop/perturb/HM2D/scLiTr.HM2D.h5ad')
+#ad <- readH5AD(sourcefile,X_name='counts')
+ad <- readH5AD(sourcefile,X_name='counts', reader = 'R')
+Merged_all <- as.Seurat(ad, counts = "counts", data = "counts")
+
+Merged_all <- subset(Merged_all, subset = species %in% c('human'))
+Merged_all@reductions$UMAP <- Merged_all@reductions$X_umap
+Merged_all@reductions$X_umap <- NULL
+Merged_all <- NormalizeData(Merged_all) 
+
+cds <- as.cell_data_set(Merged_all)
+
+cds <- cluster_cells(cds, resolution=0.0005)
+p1 <- plot_cells(cds, color_cells_by = "cluster", show_trajectory_graph = FALSE)
+p2 <- plot_cells(cds, color_cells_by = "partition", show_trajectory_graph = FALSE)
+wrap_plots(p1, p2)
+
+cds <- learn_graph(cds, use_partition = TRUE, verbose = FALSE,learn_graph_control = list(minimal_branch_len=2))
+
+plot_cells(cds,
+           color_cells_by = "cluster",
+           label_groups_by_cluster=FALSE,
+           label_leaves=FALSE,
+           label_branch_points=FALSE)
+
+cds <- order_cells(cds, root_cells = colnames(cds[,clusters(cds) == 4]))
+plot_cells(cds,
+                 color_cells_by = "pseudotime",
+                 group_cells_by = "cluster",
+                 label_cell_groups = FALSE,
+                 label_groups_by_cluster=FALSE,
+                 label_leaves=FALSE,
+                 label_branch_points=FALSE,
+                 label_roots = FALSE,
+                 trajectory_graph_color = "black")+ NoAxes()
+
+integrated.sub <- as.Seurat(cds, assay = NULL)
+
+integrated.sub$gene_NKS <- gsub("non-targeting", "NT", integrated.sub$gene_NKS)
+integrated.sub$gene_NKS <- factor(integrated.sub$gene_NKS, levels = c("NT", "NR2E1", 'ARX','SOX2',"ZNF219",'NEUROD2'))
+
+pdf(paste(fig_dir, 'vln_pseudotime.pdf',sep=''),width=6, height=3)
+VlnPlot(subset(integrated.sub), features = 'monocle3_pseudotime',group.by ='gene_NKS',pt.size = 0)+ NoLegend()+xlab('')+ scale_fill_manual(values =pal_npg("nrc", alpha = 0.7)(10))
+dev.off()
+
+
+#VlnPlot(integrated.sub, features = 'monocle3_pseudotime',group.by ='stage',pt.size = 0)+ylab('')
+pdf(paste(fig_dir, 'vln_pseudotime_stage.pdf',sep=''),width=6, height=3)
+VlnPlot(subset(integrated.sub, gene_NKS %in% c('NT')), features = 'monocle3_pseudotime',group.by ='stage',pt.size = 0)+ylab('')+ scale_fill_brewer(palette = "Set3")+ NoLegend()+xlab('')
+dev.off()
+
+dittoBoxPlot(integrated.sub, 'monocle3_pseudotime', group.by = 'stage', plots = c("boxplot", "jitter"))
+
+integrated.sub <- subset(integrated.sub, batch != 'GW17#187-M')
+integrated.sub$Clonal.cluster <- factor(integrated.sub$Clonal.cluster, levels = c("RG/Astro-biased", "EN-biased", "EN/IN-biased", 'IN-biased',"Oligo-biased"))
+
+p1 <- dittoDimPlot(integrated.sub,'monocle3_pseudotime', do.label = FALSE,theme=ggpubr::theme_classic2(), min.color = "lightgrey", max.color = "#D62728FF")+ NoAxes()+
+    scale_color_viridis() +ggtitle('Pseudotime')
+p3 <- dittoDimPlot(integrated.sub,'batch', do.label = FALSE,theme=ggpubr::theme_classic2(),order = "randomize" )+ NoAxes()+ scale_color_brewer(palette = "Set3")+ggtitle('Individual')
+p2 <- dittoDimPlot(integrated.sub,'Clonal.cluster', do.label = FALSE,theme=ggpubr::theme_classic2() )+ NoAxes()+
+    scale_color_viridis(option = "B", discrete = T)+ggtitle('Clonal Cluster')
+
+pdf(paste(fig_dir, 'umap_clones.pdf',sep=''),width=12, height=3)
+print(p1+p2+p3)
+dev.off()
+
+
+p1 <- RidgePlot(subset(integrated.sub, gene_NKS  %in% c('NT')), features = 'monocle3_pseudotime',group.by ='stage')+ NoLegend()+ylab('')+ scale_fill_brewer(palette = "Set3")+ggtitle('')
+p1 <- RidgePlot(subset(integrated.sub, gene_NKS  %in% c('NT')), features = 'monocle3_pseudotime',group.by ='stage',fill.by = NA)+ NoLegend()+ylab('')+ggtitle('')+ scale_fill_manual(values =c('#D3D3D3AA','#D3D3D3AA','#D3D3D3AA','#D3D3D3AA','#D3D3D3AA','#D3D3D3AA'))
+p1 <- RidgePlot(subset(integrated.sub, gene_NKS  %in% c('NT')), features = 'monocle3_pseudotime',group.by ='stage',fill.by = NA)+ NoLegend()+ylab('')+ggtitle('')+ scale_fill_manual(values =c('#D3D3D3AA','#D3D3D3AA','#D3D3D3AA','#D3D3D3AA','#D3D3D3AA','#D3D3D3AA'))
+p1 <- RidgePlot(subset(integrated.sub, gene_NKS  %in% c('NT')), features = 'monocle3_pseudotime',group.by ='stage')+ NoLegend()+ylab('')+scale_fill_manual(values =pal_uchicago("light", alpha = 0.7)(10))+ggtitle('')
+
+p2 <- RidgePlot(subset(integrated.sub, gene_NKS  %in% c('NT','ARX','NR2E1')), features = 'monocle3_pseudotime',group.by ='gene_NKS')+ NoLegend()+ylab('')+ scale_fill_manual(values =pal_npg("nrc", alpha = 0.7)(10))+ggtitle('')
+
+pdf(paste(fig_dir, 'ridge_clones.pdf',sep=''),width=12, height=3)
+ggarrange(p1,p2,ncol=2)
+dev.off()
+
+```
+
+
+
+```{r pseudotime in RG}
+fig_dir <- "~/Desktop/perturb/HM2D/figures/"
+
+sourcefile <- file.path('~/Desktop/perturb/HM2D/HM2D_scLiTr.RG.h5ad')
+
+#dir = '~/Desktop/'
+#sourcefile <- file.path(dir, 'query_HM2D.h5ad') 
+
+
+ad <- readH5AD(sourcefile,X_name='counts')
+ad@assays@data$counts <- ad@assays@data$X
+ad@assays@data$X <- NULL
+
+Merged_all <- as.Seurat(ad, counts = "counts", data = "counts")
+Merged_all <- subset(x = Merged_all, subset = supervised_name %in% c("RG-Astro"))
+
+Merged_all <- subset(Merged_all, subset = species %in% c('human'))
+Merged_all@reductions$UMAP <- Merged_all@reductions$X_umap
+Merged_all@reductions$X_umap <- NULL
+Merged_all <- NormalizeData(Merged_all) 
+Merged_all <- FindVariableFeatures(Merged_all, selection.method = "vst", nfeatures = 1000)
+
+Merged_all <- ScaleData(Merged_all, verbose = FALSE)
+Merged_all <- RunPCA(Merged_all, npcs = 50, verbose = FALSE)
+Merged_all <- RunUMAP(Merged_all, reduction = "pca", dims = 1:50)
+Merged_all <- FindNeighbors(Merged_all, reduction = "pca", dims = 1:30)
+Merged_all <- FindClusters(Merged_all, resolution = 0.5)
+
+
+cds <- as.cell_data_set(Merged_all)
+
+cds <- cluster_cells(cds, resolution=0.0001)
+p1 <- plot_cells(cds, color_cells_by = "cluster", show_trajectory_graph = FALSE)
+p2 <- plot_cells(cds, color_cells_by = "partition", show_trajectory_graph = FALSE)
+wrap_plots(p1, p2)
+
+cds <- learn_graph(cds, use_partition = TRUE, verbose = FALSE,learn_graph_control = list(minimal_branch_len=10))
+
+plot_cells(cds,
+           color_cells_by = "cluster",
+           label_groups_by_cluster=FALSE,
+           label_leaves=FALSE,
+           label_branch_points=FALSE)
+
+cds <- order_cells(cds, root_cells = colnames(cds[,clusters(cds) == 3]))
+cs_RG <- cds
+
+```
+
+
+```{r macaque clonal pseudotime}
+fig_dir <- "~/Desktop/perturb/HM2D/figures/"
+
+sourcefile <- file.path('~/Desktop/perturb/HM2D/scLiTr.HM2D.h5ad')
+ad <- readH5AD(sourcefile,X_name='counts')
+Merged_all <- as.Seurat(ad, counts = "counts", data = "counts")
+
+
+Merged_all <- subset(Merged_all, subset = species %in% c('macaque'))
+Merged_all@reductions$UMAP <- Merged_all@reductions$X_umap
+Merged_all@reductions$X_umap <- NULL
+Merged_all <- NormalizeData(Merged_all) 
+
+cds <- as.cell_data_set(Merged_all)
+
+cds <- cluster_cells(cds, resolution=0.005)
+p1 <- plot_cells(cds, color_cells_by = "cluster", show_trajectory_graph = FALSE)
+p2 <- plot_cells(cds, color_cells_by = "partition", show_trajectory_graph = FALSE)
+wrap_plots(p1, p2)
+
+cds <- learn_graph(cds, use_partition = TRUE, verbose = FALSE,learn_graph_control = list(minimal_branch_len=10))
+
+plot_cells(cds,
+           color_cells_by = "cluster",
+           label_groups_by_cluster=FALSE,
+           label_leaves=FALSE,
+           label_branch_points=FALSE)
+
+cds <- order_cells(cds, root_cells = colnames(cds[,clusters(cds) == 4]))
+plot_cells(cds,
+                 color_cells_by = "pseudotime",
+                 group_cells_by = "cluster",
+                 label_cell_groups = FALSE,
+                 label_groups_by_cluster=FALSE,
+                 label_leaves=FALSE,
+                 label_branch_points=FALSE,
+                 label_roots = FALSE,
+                 trajectory_graph_color = "black")+ NoAxes()
+
+integrated.sub <- as.Seurat(cds, assay = NULL)
+
+integrated.sub$gene_NKS <- gsub("non-targeting", "NT", integrated.sub$gene_NKS)
+integrated.sub$gene_NKS <- factor(integrated.sub$gene_NKS, levels = c("NT", "NR2E1", 'ARX','SOX2',"ZNF219",'NEUROD2'))
+integrated.sub$Clonal.cluster <- factor(integrated.sub$Clonal.cluster, levels = c("RG/Astro-biased", "EN-biased", "EN/IN-biased", 'IN-biased',"Oligo-biased"))
+#VlnPlot(subset(integrated.sub, gene_NKS %in% c('non-targeting','ARX','NR2E1')), features = 'monocle3_pseudotime',group.by ='gene_NKS',pt.size = 0)+ NoLegend()+xlab('')+ scale_fill_manual(values = c("#E64B35B2", "#4DBBD5B2", "#00A087B2", "#F39B7FB2" ))
+
+pdf(paste(fig_dir, 'vln_pseudotime.pdf',sep=''),width=6, height=3)
+VlnPlot(subset(integrated.sub), features = 'monocle3_pseudotime',group.by ='gene_NKS',pt.size = 0)+ NoLegend()+xlab('')+ scale_fill_manual(values =pal_npg("nrc", alpha = 0.7)(10))
+dev.off()
+
+
+#VlnPlot(integrated.sub, features = 'monocle3_pseudotime',group.by ='stage',pt.size = 0)+ylab('')
+pdf(paste(fig_dir, 'vln_pseudotime_stage.pdf',sep=''),width=6, height=3)
+VlnPlot(subset(integrated.sub, gene_NKS %in% c('NT')), features = 'monocle3_pseudotime',group.by ='stage',pt.size = 0)+ylab('')+ scale_fill_brewer(palette = "Set3")+ NoLegend()+xlab('')
+dev.off()
+
+
+pdf(paste(fig_dir, 'box_clones_KD.pdf',sep=''),width=3, height=3)
+ggboxplot(subset(integrated.sub, gene_NKS  %in% c('NT','ARX','NR2E1'))@meta.data, "gene_NKS", "monocle3_pseudotime", fill = 'gene_NKS',orientation = "horizontal")+NoLegend()+RotatedAxis()+ 
+    stat_compare_means(aes(label = after_stat(p.signif)),
+                       method = "wilcox.test", ref.group = "NT")+ scale_fill_manual(values =pal_npg("nrc", alpha = 0.7)(10))+xlab('')
+dev.off()
+
+```
+
+
+```{r transfer clonal pseudotime to RG and fit gene expression}
+meta_cds <- as.data.frame(as.Seurat(cds, assay = NULL)@meta.data)
+meta_cds_RG <- as.data.frame(as.Seurat(cds_RG, assay = NULL)@meta.data)
+
+library(dplyr)
+library(RColorBrewer)
+library(ComplexHeatmap)
+
+meta_cds$unique_clone <- rownames(meta_cds)
+pseudotime_lookup <- meta_cds %>% select(unique_clone, monocle3_pseudotime)
+meta_cds_RG <- meta_cds_RG %>%
+  left_join(pseudotime_lookup, by = "unique_clone")
+#colData(cds_RG) <- DataFrame(meta_cds_RG)
+colData(cds_RG)$monocle3_pseudotime <- meta_cds_RG$monocle3_pseudotime
+pseudotime<- setNames(colData(cds)$monocle3_pseudotime, colnames(cds))
+
+cds <- readRDS('~/Desktop/perturb/HM2D/RG.monocle.rds')
+
+genes <- c( 'FABP7','CLU', 'PTN', 'SGK3','LINGO2','GLI3', 'NEDD4L', 'TENM4','LRRC7','MOXD1','TENM1',
+            'SYNE2', 'HMGA2', 'BMP7','NEUROD2','NEUROD6', 'HES6',  'SOX4','ASCL1','DLX2','EGFR',
+            'GSX2', 'OLIG2', 'NHS',
+            'LUZP2','NTRK2', 'DCLK1','ID3','PDGFA' )
+genes <- intersect(genes, rownames(exprs(cds)))
+
+pt.matrix <- exprs(cds)[match(genes,rownames(rowData(cds))),order(pseudotime)]
+#Can also use "normalized_counts" instead of "exprs" to use various normalization methods, for example:
+#normalized_counts(cds, norm_method = "log")
+
+pt.matrix <- t(apply(pt.matrix,1,function(x){smooth.spline(x,df=3)$y}))
+pt.matrix <- t(apply(pt.matrix,1,function(x){(x-mean(x))/sd(x)}))
+rownames(pt.matrix) <- genes;
+
+library(colorRamp2)
+col_fun = colorRamp2(c(-2,0,2), c('#316dd4', '#FFFFFF', '#f43f03'))
+hthc <-  Heatmap(
+    pt.matrix,
+    name                         = "z-score",
+    col                          = colorRamp2(seq(from=-2,to=2,length=11),rev(brewer.pal(11, "Spectral"))),#col_fun, #
+    show_row_names               = TRUE,
+    show_column_names            = FALSE,
+    row_names_gp                 = gpar(fontsize = 8),
+    clustering_method_rows = "ward.D2",
+    clustering_method_columns = "ward.D2",
+    row_title_rot                = 0,
+    cluster_rows                 = FALSE,
+    cluster_row_slices           = FALSE,
+    cluster_columns              = FALSE, use_raster = FALSE)
+
+fig_dir = '~/Desktop/perturb/HM2D/figures/'
+pdf(paste(fig_dir, 'heatmap_pseudotime.pdf',sep=''),width=3.5, height=6)
+print(hthc)
+dev.off()
+```
+
+
+```{r}
+integrated.sub <- subset(as.Seurat(cds, assay = NULL))
+integrated.sub <- NormalizeData(integrated.sub) 
+integrated.sub$gene_NKS <- as.character(integrated.sub$gene_NKS)
+integrated.sub$gene_NKS[integrated.sub$gene_NKS == "non-targeting"] <- "NT"
+integrated.sub$gene_NKS <- factor(integrated.sub$gene_NKS, levels = c('NT','NR2E1','ARX','SOX2','ZNF219','NEUROD2'))
+
+myplot <- list()
+for (gene in c('SYNE2','SGK3','MOXD1','TENM1','NTRK2','NHS')){
+    myplot[[gene]] <- VlnPlot(subset(x = integrated.sub, gene_NKS %in% c('NT','ARX','NR2E1') & supervised_name == 'RG-Astro'),features = gene ,group.by ='gene_NKS',pt.size = 0)+ NoLegend()+xlab('')+ylab('')+ scale_fill_manual(values = c("#E64B35B2", "#4DBBD5B2", "#00A087B2"))
+}
+
+pdf(paste(fig_dir, 'vln_DEG.pdf',sep=''),width=12, height=2)
+ggarrange(plotlist = myplot, ncol=6, nrow=1)
+dev.off()
+
+```
+
+

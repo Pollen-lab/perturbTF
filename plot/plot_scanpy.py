@@ -113,8 +113,8 @@ sc.pl.umap(adata, color=['species'],frameon=False, legend_fontsize=13, legend_fo
 
 adata.obs['supervised_name'] = adata.obs['supervised_name'].astype('category')
 #sc.tl.dendrogram(adata, 'supervised_name')
-dp = sc.pl.dotplot(adata, ['CDC20','HMGB2','GLIS3','VIM','EOMES','NEUROD6','EPHA3','MEF2C','ST18','PAX6','SCGN','BCAS1','EBF1','AIF1'], 
-                   'supervised_name', categories_order = ['RG_DIV','RG-Astro','IPC_EN','EN_ImN','EN','IPC_IN','IN_dLGE-CGE','OPC-Oligo','Vasc','MG','Technical'],
+dp = sc.pl.dotplot(adata, ['CDC20','HMGB2','GLI3','VIM','EOMES','NEUROD6','EPHA3','MEF2C','ST18','PAX6','SCGN','BCAS1','EBF1','AIF1'], 
+                   'supervised_name', categories_order = ['RG_DIV','RG-Astro','IPC_EN','EN_ImN','EN','IPC_IN','IN','OPC-Oligo','Vasc','MG','Technical'],
                                  standard_scale='var',dot_max=0.6, return_fig=True)
 dp.add_totals().style(dot_edge_color='black', dot_edge_lw=0.5,cmap='Reds' ).savefig("./figures/dotplot-HM2D.pdf")
 

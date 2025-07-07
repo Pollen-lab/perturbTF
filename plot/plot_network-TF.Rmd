@@ -1,0 +1,456 @@
+---
+title: "GRN-midbrain"
+output: html_notebook
+---
+
+```{r disease genes}
+dir = '~/Desktop/perturb/NDD/'
+fig_dir='~/Desktop/perturb/HM2D/figures/'
+
+NDD <- read.csv(file.path(dir, 'disease.csv'))
+```
+
+
+```{r convergent DEGs}
+library(dplyr)
+library(stringr)
+
+dir = '~/Desktop/perturb/HM2D/DEseq2/2D_guides_cleaned_min5/'
+fig_dir='~/Desktop/perturb/HM2D/figures/'
+
+results <- data.frame()
+
+#for (gene in c('NFIB','POU3F1','ASCL1','TBR1','E2F1','VEZF1','SATB2','KAT7','TCF3')){ #for supplement
+for (gene in c('NR2E1','ARX','SOX2','ZNF219','ZNF148','SOX9','CTCF','ATF7','MEIS2','VEZF1','E2F1','POU3F2','KLF11','ZNF441',
+   'DEAF1','TFAP2C','POU3F1','BHLHE22','ZBTB18','KAT7','KLF3','RFX2','NFIA','TBR1','SOX5','SATB2','NFIB','POU2F1',
+  'MEF2C','KLF10','NEUROD6','ZBTB20','NR4A2','EMX1','TCF7L1', 'NEUROD2','ZNF281','TCF12','PHF21A','FOS','ASCL1',
+   'JUN','TCF3','SOX6')){
+  df_gene <- data.frame()
+  for (file in list.files(dir, pattern = gene)){
+    df <- read.csv(file.path(dir,file),header = TRUE)
+    df <- filter(df, padj < 0.05)
+    df$Target.Gene <- gene
+    df$Cell.Type <- str_extract(file, '(?<=\\.)[^.]+(?=\\.)')
+    df_gene <- rbind(df_gene, df)
+    df_gene <- df_gene[order(df_gene$log2FoldChange),]
+    df_gene <- df_gene[!duplicated(df_gene$genes), ]
+  }
+  results <- rbind(results, df_gene)
+}
+
+#convergent DEGs
+convergent <- unique(filter(as.data.frame(table(results$genes)), Freq > 1)$Var1)
+nonconvergent <- unique(filter(as.data.frame(table(results$genes)), Freq == 1)$Var1)
+```
+
+
+
+```{r load TF networks}
+library(dplyr)
+library(stringr)
+
+dir = '~/Desktop/perturb/HM2D/DEseq2/2D_guides_cleaned_min5/'
+fig_dir='~/Desktop/perturb/HM2D/figures/'
+
+
+tfs <-  c('ARX','SOX2','NR2E1','ZNF219','SOX9','CTCF','PHF21A','NEUROD2')
+
+
+results <- data.frame()
+for (gene in tfs){
+  df_gene <- data.frame()
+  for (file in list.files(dir, pattern = gene)){
+    df <- read.csv(file.path(dir,file),header = TRUE)
+    df <- filter(df, padj < 0.05)
+    df$Target.Gene <- gene
+    df$Cell.Type <- str_extract(file, '(?<=\\.)[^.]+(?=\\.)')
+    df_gene <- rbind(df_gene, df)
+    df_gene <- df_gene[order(df_gene$log2FoldChange),]
+    df_gene <- df_gene[!duplicated(df_gene$genes), ]
+  }
+  results <- rbind(results, df_gene)
+}
+
+#add direction of regulation
+results$regulation <- ifelse(results$log2FoldChange < 0 ,1,-1)
+
+#filter
+results <- results %>%
+  mutate(disease = 
+           ifelse(genes %in% c(NDD$ASD_SFARI_score1,NDD$MDD_Howard2019,NDD$ASD_SFARI_score1,
+                               NDD$SCZ_Trubetskoy2022, NDD$BP_Mullins2021,NDD$ADHD_Demontis2023,NDD$NDD_Fu2022), 1, 0))  %>%
+  #filter(disease == 1) %>%
+  #filter(genes %in% filter(as.data.frame(table(results$genes)), Freq > 1)$Var1)
+  filter(genes %in% convergent)
+
+
+#nodes to label (DEGs showed up more than twice in the network and disease related)
+df <- as.data.frame(table(results$genes))
+hubs <- filter(as.data.frame(table(results$genes)), Freq > 1)$Var1
+hubs <- intersect(hubs, c(NDD$ASD_SFARI_score1,NDD$MDD_Howard2019,NDD$ASD_SFARI_score1,
+                               NDD$SCZ_Trubetskoy2022, NDD$BP_Mullins2021,NDD$ADHD_Demontis2023,NDD$NDD_Fu2022))
+hubs <- c(hubs, 'CSMD1','PTPRD','OPCML','BCL11B','IL1RAPL1')
+
+```
+
+
+
+```{r}
+#formulate gene graph for ggraph
+set.seed(123)
+library(tidyr)
+library(dplyr)
+library(tidygraph)
+
+
+gene_net <- results
+colnames(gene_net)[which(names(gene_net) == "Target.Gene")] <- "source"
+colnames(gene_net)[which(names(gene_net) == "genes")] <- "target"
+
+gene_net <- gene_net %>%
+    dplyr::select(source, target, everything()) %>%
+    dplyr::group_by(target) 
+
+
+net_tfs <- c(tfs, as.character(hubs))
+
+gene_graph <- as_tbl_graph(gene_net) %>%
+  activate(edges) %>%
+  mutate(from_node=.N()$name[from], to_node=.N()$name[to]) %>%
+  mutate(dir=sign(regulation)) %>%
+  activate(nodes) %>%
+  mutate(centrality=centrality_pagerank()) %>%
+  mutate(tf=ifelse(name %in% tfs, 'yes','no')) %>%
+  mutate(convergent=ifelse(name %in% convergent, 'yes','no')) %>%
+  mutate(disease=ifelse(name %in% c(NDD$ASD_SFARI_score1,NDD$MDD_Howard2019,NDD$ASD_SFARI_score1,
+                               NDD$SCZ_Trubetskoy2022, NDD$BP_Mullins2021,NDD$ADHD_Demontis2023,NDD$NDD_Fu2022), 'yes','no')) %>%
+  mutate(label=ifelse(name %in% as.character(hubs), 'yes','no'))
+
+```
+
+
+
+
+
+
+```{r}
+color_edges = TRUE
+edge_width = 0.2
+edge_color = c('-1'='darkgrey', '1'='orange')
+edge_color = c('-1'='darkgrey','1'= '#fda683')
+
+node_size = 1.5
+text_size = 10
+color_nodes = TRUE
+node_color = c('no'='darkgrey', 'yes'="#F4A339")
+#node_size = c('no'=1, 'yes'=1.5)
+label_nodes = 'tfs'
+#label_nodes = 'all'
+
+unique_colors <- list('no','yes')
+fill_color <- setNames(c("darkgrey", '#fda683'), unique_colors)
+label_color <- setNames(c("black", '#fda683'), unique_colors)
+border_color <- setNames(c("darkgrey","black"), unique_colors)
+
+library(ggraph)
+library(tidygraph)
+
+p <- ggraph(gene_graph, layout='fr' 
+            #circular=circular
+            )
+
+if (color_edges){
+  p <- p + geom_edge_diagonal(aes(color=factor(dir)), width=edge_width, repel=TRUE) +
+    scale_edge_color_manual(values=edge_color)
+  } else {
+    p <- p + geom_edge_diagonal(width=edge_width, color=edge_color[1], repel=TRUE)
+  }
+
+if (color_nodes){
+  p <- p + geom_node_point(aes(fill=factor(disease), color=factor(label)),  shape=21, size = 1.5, stroke = 1) +
+    scale_color_manual(values=border_color)  + 
+    scale_fill_manual(values=fill_color)
+   } else {
+    p <- p + geom_node_point(
+  color='darkgrey', shape=21, fill='lightgrey', size=node_size, stroke=0.5)
+    }
+
+
+if (label_nodes=='tfs'){
+  p <- p + geom_node_label(
+    aes(label=name, filter=name%in%tfs, fill = factor(disease)),
+    size=text_size/ggplot2::.pt,
+    label.padding=unit(0.05, 'line'),
+    color = "white",       
+    #fill = "black", 
+    #repel=TRUE
+    ) + 
+    scale_fill_manual(values=label_color)
+  p <- p + geom_node_label(
+        #aes(label=name, filter=name%in%as.character(hubs), fill = factor(disease)),
+        aes(label=name, filter=name%in%as.character(hubs)),
+        size=text_size/ggplot2::.pt,
+        label.padding=unit(0.05, 'line'),
+        repel=TRUE
+    )
+  } else {
+      p <- p + geom_node_label(
+      aes(label=name, filter=name==tf),
+      size=text_size/ggplot2::.pt,
+      label.padding=unit(0.05, 'line'),
+      repel=TRUE
+      )
+    }
+
+p <- p + #scale_size_continuous(range=node_size) +
+  theme_void() #+ no_legend()
+
+```
+
+
+
+```{r}
+fig_dir='~/Desktop/perturb/HM2D/figures/'
+pdf(paste(fig_dir, 'Network-TF.pdf',sep=''),width=11, height=9)
+print(p)
+dev.off()
+
+fig_dir='~/Desktop/perturb/HM2D/figures/'
+pdf(paste(fig_dir, 'Network-TF-small.pdf',sep=''),width=6.5, height=6)
+print(p)
+dev.off()
+```
+
+
+```{r fig4}
+library(stringi)
+library(dplyr)
+
+
+fig_dir='~/Desktop/perturb/HM2D/figures/'
+
+
+tfs <-  c('ARX','SOX2','NR2E1','ZNF219','NEUROD2')
+
+dir = '~/Desktop/perturb/HM2D/DEseq2/2D_guides_cleaned_min5'
+results <- data.frame()
+for (gene in tfs){
+    df_gene <- data.frame()
+    for (file in list.files(dir, pattern = gene)){
+        df <- read.csv(file.path(dir,file),header = TRUE)
+        df <- filter(df, padj < 0.05)
+        df$Target.Gene <- gene
+        df$Cell.Type <- str_extract(file, '(?<=\\.)[^.]+(?=\\.)')
+        df_gene <- rbind(df_gene, df)
+        df_gene <- df_gene[order(df_gene$log2FoldChange),]
+        df_gene <- df_gene[!duplicated(df_gene$genes), ]
+    }
+    results <- rbind(results, df_gene)
+}
+
+#filter
+results <- results %>%
+  mutate(disease = 
+           ifelse(genes %in% c(NDD$ASD_SFARI_score1,NDD$MDD_Howard2019,NDD$ASD_SFARI_score1,
+                               NDD$SCZ_Trubetskoy2022, NDD$BP_Mullins2021,NDD$ADHD_Demontis2023,NDD$NDD_Fu2022), 1, 0))  %>%
+  mutate(convergent = 
+           ifelse(genes %in% convergent, "convergent",
+           ifelse(genes %in% nonconvergent, "nonconvergent", 'NA'))) %>% 
+  #filter(disease == 1) %>%
+  #filter(genes %in% filter(as.data.frame(table(results$genes)), Freq > 1)$Var1)
+  filter(convergent != 'NA')
+
+genestoplot <- unique(results$genes)
+
+results_hm <- data.frame()  
+
+for (gene in c('ARX','NR2E1','ZNF219','SOX2','NEUROD2')) {
+  for (celltype in c('RG-Astro', 'RG_DIV','IPC_EN','IPC_IN','EN_ImN','EN','OPC-Oligo','IN_LQ',
+                     'IN_dLGE-CGE')){
+    dir = '~/Desktop/perturb/HM2D/DEseq2'
+    if (file.exists(file.path(dir,'human',paste(gene, celltype,'csv',sep='.')))) {
+      results_human <- read.csv(file.path(dir,'human',paste(gene, celltype,'.csv',sep='.')),header = TRUE,row.names = 1)
+    } else {next}
+    if (file.exists(file.path(dir,'macaque',paste(gene, celltype,'csv',sep='.')))) {
+      results_macaque <- read.csv(file.path(dir,'macaque',paste(gene, celltype,'.csv',sep='.')),header = TRUE,row.names = 1)
+    } else {next}
+    human_up <- rownames(filter(results_human, log2FoldChange > 0 & padj < 0.05))
+    human_down <- rownames(filter(results_human, log2FoldChange < 0 & padj < 0.05))
+    macaque_up <- rownames(filter(results_macaque, log2FoldChange > 0 & padj < 0.05))
+    macaque_down <- rownames(filter(results_macaque, log2FoldChange < 0 & padj < 0.05))
+    #genestoplot <- union(rownames(results_human), rownames(results_macaque))
+    #add genes to plot from 2D human data
+    if (file.exists(file.path(dir,'2D_guides_cleaned',paste(gene, celltype,'csv',sep='.')))) {
+      results_human <- read.csv(file.path(dir,'2D_guides_cleaned',paste(gene, celltype,'csv',sep='.')),header = TRUE,row.names = 1)
+      #genestoplot <- union(rownames(results_human), genestoplot)
+      human_up <- union(human_up, rownames(filter(results_human, log2FoldChange > 0 & padj < 0.05)))
+      human_down <- union(human_down, rownames(filter(results_human, log2FoldChange < 0 & padj < 0.05)))
+    }
+    dir = '~/Desktop/perturb/HM2D/DEseq2/'
+    if (file.exists(file.path(dir,'human',paste(gene, celltype,'csv',sep='.')))) {
+      results_human <- read.csv(file.path(dir,'human',paste(gene, celltype,'csv',sep='.')),header = TRUE,row.names = 1)
+    } else {next}
+    if (file.exists(file.path(dir,'macaque',paste(gene, celltype,'csv',sep='.')))) {
+      results_macaque <- read.csv(file.path(dir,'macaque',paste(gene, celltype,'csv',sep='.')),header = TRUE,row.names = 1)
+    } else {next}
+    results_human <- results_human[genestoplot,]
+    results_macaque <- results_macaque[genestoplot,]
+    df <- data.frame(genes = rownames(results_human), human = results_human$log2FoldChange,macaque =
+                     results_macaque$log2FoldChange)
+    df$Target.Gene <- gene
+    df$Cell.Type <- celltype
+    df <- df %>% mutate(DEG = 
+           ifelse(genes %in% intersect(human_up, macaque_up),
+                  "conserved_up",
+           ifelse(genes %in% intersect(human_down, macaque_down),
+                  "conserved_down",
+           ifelse(genes %in% union(intersect(human_up, macaque_down),intersect(human_down, macaque_up)) ,
+                 "divergent",
+                 "human/macaque only"))))
+    results_hm <- rbind(results_hm,df)
+  }
+}
+
+results <- merge(results, results_hm, by = c("genes", "Target.Gene", "Cell.Type"))
+#results <-  filter(results_hm, genes %in% results$genes)
+results <- results %>%
+  #mutate(disease = 
+  #         ifelse(genes %in% c(NDD$ASD_Fu2022,NDD$MDD_Howard2019,NDD$NDD_Wang2022,NDD$SCZ_Trubetskoy2022), 1, 0))  %>%
+  #mutate(convergent = 
+  #         ifelse(genes %in% convergent, "convergent",
+  #         ifelse(genes %in% nonconvergent, "nonconvergent", 'NA'))) %>%
+  mutate(sig = ifelse(human * macaque > 0, 'agree', 'disagree'))  %>%
+  filter(convergent == 'convergent')
+
+
+#df <- as.data.frame(table(results$genes))
+#hubs <- filter(as.data.frame(table(results$genes)), Freq > 1)$Var1
+#hubs <- union(hubs, intersect(results$genes, c(NDD$ASD_Fu2022,NDD$MDD_Howard2019,NDD$NDD_Wang2022,NDD$SCZ_Trubetskoy2022)))
+hubs <- c(hubs, filter(results, DEG != 'human/macaque only')$genes)
+hubs <- union(filter(as.data.frame(table(results$genes)), Freq > 1)$Var1, filter(results, DEG != 'human/macaque only')$genes)
+hubs <- filter(results, DEG != 'human/macaque only')$genes
+```
+
+
+
+
+```{r}
+#formulate gene graph for ggraph
+set.seed(123)
+library(tidyr)
+library(dplyr)
+library(tidygraph)
+
+
+gene_net <- results
+colnames(gene_net)[which(names(gene_net) == "Target.Gene")] <- "source"
+colnames(gene_net)[which(names(gene_net) == "genes")] <- "target"
+
+gene_net <- gene_net %>%
+    dplyr::select(source, target, everything()) %>%
+    dplyr::group_by(target) 
+
+
+net_tfs <- c(tfs, as.character(hubs))
+
+gene_graph <- as_tbl_graph(gene_net) %>%
+  activate(edges) %>%
+  mutate(from_node=.N()$name[from], to_node=.N()$name[to]) %>%
+  mutate(dir=sign(human * macaque)) %>%
+  activate(nodes) %>%
+  mutate(centrality=centrality_pagerank()) %>%
+  mutate(tf=ifelse(name %in% tfs, 'yes','no')) %>%
+  mutate(disease=ifelse(name %in% c(NDD$ASD_SFARI_score1,NDD$MDD_Howard2019,NDD$ASD_SFARI_score1,
+                               NDD$SCZ_Trubetskoy2022, NDD$BP_Mullins2021,NDD$ADHD_Demontis2023,NDD$NDD_Fu2022), 'yes','no')) %>%
+  mutate(label=ifelse(name %in% as.character(hubs), 'yes','no'))  %>%
+  mutate(DEG=ifelse(name %in% filter(results, DEG != 'human/macaque only')$genes, 'yes','no')) 
+
+```
+
+
+```{r}
+color_edges = TRUE
+edge_width = 0.2
+edge_color = c('-1'='darkgrey', '1'='orange')
+edge_color = c('-1'='darkgrey','1'= '#fda683')
+
+node_size = 1.5
+text_size = 10
+color_nodes = TRUE
+node_color = c('no'='darkgrey', 'yes'="#F4A339")
+#node_size = c('no'=1, 'yes'=1.5)
+label_nodes = 'tfs'
+#label_nodes = 'all'
+
+unique_colors <- list('no','yes')
+fill_color <- setNames(c("darkgrey", '#fda683'), unique_colors)
+label_color <- setNames(c("black", '#fda683'), unique_colors)
+border_color <- setNames(c("darkgrey","black"), unique_colors)
+
+library(ggraph)
+library(tidygraph)
+
+p <- ggraph(gene_graph, layout='fr' 
+            #circular=circular
+            )
+
+if (color_edges){
+  p <- p + geom_edge_diagonal(aes(color=factor(dir)), width=edge_width, repel=TRUE) +
+    scale_edge_color_manual(values=edge_color)
+  } else {
+    p <- p + geom_edge_diagonal(width=edge_width, color=edge_color[1], repel=TRUE)
+  }
+
+if (color_nodes){
+  p <- p + geom_node_point(aes(fill=factor(DEG), color=factor(label)),  shape=21, size = 1.5, stroke = 1) +
+    scale_color_manual(values=border_color)  + 
+    scale_fill_manual(values=fill_color)
+   } else {
+    p <- p + geom_node_point(
+  color='darkgrey', shape=21, fill='lightgrey', size=node_size, stroke=0.5)
+    }
+
+
+if (label_nodes=='tfs'){
+  p <- p + geom_node_label(
+    aes(label=name, filter=name%in%tfs),
+    size=text_size/ggplot2::.pt,
+    label.padding=unit(0.05, 'line'),
+    color = "white",       
+    fill = "black", 
+    #repel=TRUE
+    ) 
+  p <- p + geom_node_label(
+        aes(label=name, filter=name%in%as.character(hubs)),
+        size=text_size/ggplot2::.pt,
+        label.padding=unit(0.05, 'line'),
+        repel=TRUE
+    )
+  } else {
+      p <- p + geom_node_label(
+      aes(label=name, filter=name==tf),
+      size=text_size/ggplot2::.pt,
+      label.padding=unit(0.05, 'line'),
+      repel=TRUE
+      )
+    }
+
+p <- p + #scale_size_continuous(range=node_size) +
+  theme_void() #+ no_legend()
+
+```
+
+
+```{r}
+fig_dir='~/Desktop/perturb/HM2D/figures/'
+pdf(paste(fig_dir, 'Network-species.pdf',sep=''),width=12, height=10)
+print(p)
+dev.off()
+
+fig_dir='~/Desktop/perturb/HM2D/figures/'
+pdf(paste(fig_dir, 'Network-species-small.pdf',sep=''),width=6, height=4
+    )
+print(p)
+dev.off()
+```
+
