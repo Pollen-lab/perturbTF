@@ -251,6 +251,86 @@ dev.off()
 ```
 
 
+```{r D0 KD}
+dir = '~/Desktop/perturb/'
+x = 'D7KD_BJPD7.csv'
+data <- read.csv(file.path(dir,x),header = TRUE)
+data <- as_tibble(data)
+head(data)
+
+data$batch <- paste(data$Individual,data$Diff,sep='-')
+#add one column for all NT guides
+data$sgRNA <- data$Guide
+data <-data %>% mutate(sgRNA = replace(sgRNA, Guide %in% c('NT_g1','NT_g2'), "NT"))
+
+#normalize count between individuals
+normalization_factors <- data %>%
+    filter(Target.Gene == 'NT') %>%
+    group_by(batch, Target.Gene) %>%
+    summarize(
+        EOMES_factor = mean(Cells.Single.Cells.Single.Cells2.mCherry.EOMES...Freq..of.Parent, na.rm = TRUE),
+        SOX2_factor = mean(Cells.Single.Cells.Single.Cells2.mCherry.SOX2...Freq..of.Parent, na.rm = TRUE),
+        ARX_factor = mean(Cells.Single.Cells.Single.Cells2.mCherry.ARX...Freq..of.Parent, na.rm = TRUE),
+        .groups = 'drop'
+    )
+data <- data %>%
+    left_join(normalization_factors, by = c("batch")) %>%
+    mutate(
+        EOMES = Cells.Single.Cells.Single.Cells2.mCherry.EOMES...Freq..of.Parent / EOMES_factor,
+        SOX2 = Cells.Single.Cells.Single.Cells2.mCherry.SOX2...Freq..of.Parent / SOX2_factor,
+        ARX = Cells.Single.Cells.Single.Cells2.mCherry.ARX...Freq..of.Parent / ARX_factor,
+       ) %>%
+    dplyr::select(-ends_with("_factor"))
+
+data$Target.Gene <- data$Target.Gene.x
+
+d7 <- filter(data, Diff == "D0")
+compare_means(EOMES ~ sgRNA, data = d7, paired = FALSE,ref.group = 'NT',method = "wilcox.test")
+compare_means(ARX ~ sgRNA, data = d7, paired = FALSE,ref.group = 'NT',method = "wilcox.test")
+compare_means(SOX2 ~ sgRNA, data = d7, paired = FALSE,ref.group = 'NT',method = "wilcox.test")
+
+d7$Guide <- as.factor(d7$Guide)
+d7$Guide <- factor(d7$Guide , levels=c("NT_g1", "NT_g2","PAX6_g1","PAX6_g2","EOMES_g1",
+                                       "EOMES_g2","ARX_g1","ARX_g2","SOX2_g1","SOX2_g3"))
+d7$Target.Gene <- as.factor(d7$Target.Gene)
+d7$Target.Gene <- factor(d7$Target.Gene, c("NT","PAX6", "EOMES", 'ARX','SOX2'))
+
+each.vs.basemean <- list()
+each.vs.basemean[['SOX2']] <- tibble::tribble(
+  ~group1, ~group2, ~p.adj, ~y.position,
+  "all",   "SOX2_g3",     "***", 1.2,
+)
+each.vs.basemean[['EOMES']] <- tibble::tribble(
+  ~group1, ~group2, ~p.adj, ~y.position,
+  "all",   "EOMES_g1",     "***", 1.2,
+  "all",   "EOMES_g2",     "***", 1.2,
+)
+each.vs.basemean[['ARX']] <- tibble::tribble(
+  ~group1, ~group2, ~p.adj, ~y.position,
+  "all",   "ARX_g1",     "**", 1.2,
+  "all",   "ARX_g2",     "***", 1.2,
+)
+
+myplots <- list()
+for (gene in c('EOMES','ARX','SOX2')){
+    myplots[[gene]] <- ggboxplot(filter(d7, Target.Gene %in% c('NT',gene)), y = gene, x = "Guide",xlab='',
+                                 fill = "Target.Gene",palette = c( "#E64B35B2","#4DBBD5B2"),# pal_npg("nrc", alpha = 0.7)(10),
+                                 add = "dotplot", add.params = list(shape = 21, size = 3)) + rremove("legend") + rotate_x_text(45) + 
+        #stat_compare_means(comparisons = my_comparisons,label = "p.signif", hide.ns = TRUE, method = "t.test") +
+        geom_hline(yintercept = 1, linetype = "dashed", color = "darkgrey")  + add_pvalue(
+            each.vs.basemean[[gene]], label.size = 5,
+            fontface = "bold") +   
+        theme(legend.position="none") 
+}
+
+
+fig_dir='~/Desktop/perturb/figures/'
+pdf(paste(fig_dir, 'Flow-D0.pdf',sep=''),width=2, height=6)
+print(ggarrange(plotlist = myplots, ncol =1))
+dev.off()
+
+```
+
 # Session Info
 <details>
 ```{r session, echo=FALSE}

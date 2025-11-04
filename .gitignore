@@ -1,6 +1,7 @@
-.ipynb_checkpoints/*
-analysis/.ipynb_checkpoints/*
-docs/.ipynb_checkpoints/*
-plot/.ipynb_checkpoints/*
-preprocessing/.ipynb_checkpoints/*
-target-selection/.ipynb_checkpoints/*
+.ipynb_checkpoints/
+analysis/.ipynb_checkpoints/
+docs/.ipynb_checkpoints/
+plot/.ipynb_checkpoints/
+preprocessing/.ipynb_checkpoints/
+target-selection/.ipynb_checkpoints/
+**/*.ipynb_checkpoints/

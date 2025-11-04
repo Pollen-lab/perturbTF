@@ -82,7 +82,7 @@ dev.off()
 dittoBoxPlot(integrated.sub, 'monocle3_pseudotime', group.by = 'stage', plots = c("boxplot", "jitter"))
 
 integrated.sub <- subset(integrated.sub, batch != 'GW17#187-M')
-integrated.sub$Clonal.cluster <- factor(integrated.sub$Clonal.cluster, levels = c("RG/Astro-biased", "EN-biased", "EN/IN-biased", 'IN-biased',"Oligo-biased"))
+integrated.sub$Clonal.cluster <- factor(integrated.sub$Clonal.cluster, levels = c("RG-biased", "EN-biased", "EN/IN-biased", 'IN-biased',"Oligo-biased"))
 
 p1 <- dittoDimPlot(integrated.sub,'monocle3_pseudotime', do.label = FALSE,theme=ggpubr::theme_classic2(), min.color = "lightgrey", max.color = "#D62728FF")+ NoAxes()+
     scale_color_viridis() +ggtitle('Pseudotime')
@@ -203,7 +203,7 @@ integrated.sub <- as.Seurat(cds, assay = NULL)
 
 integrated.sub$gene_NKS <- gsub("non-targeting", "NT", integrated.sub$gene_NKS)
 integrated.sub$gene_NKS <- factor(integrated.sub$gene_NKS, levels = c("NT", "NR2E1", 'ARX','SOX2',"ZNF219",'NEUROD2'))
-integrated.sub$Clonal.cluster <- factor(integrated.sub$Clonal.cluster, levels = c("RG/Astro-biased", "EN-biased", "EN/IN-biased", 'IN-biased',"Oligo-biased"))
+integrated.sub$Clonal.cluster <- factor(integrated.sub$Clonal.cluster, levels = c("RG-biased", "EN-biased", "EN/IN-biased", 'IN-biased',"Oligo-biased"))
 #VlnPlot(subset(integrated.sub, gene_NKS %in% c('non-targeting','ARX','NR2E1')), features = 'monocle3_pseudotime',group.by ='gene_NKS',pt.size = 0)+ NoLegend()+xlab('')+ scale_fill_manual(values = c("#E64B35B2", "#4DBBD5B2", "#00A087B2", "#F39B7FB2" ))
 
 pdf(paste(fig_dir, 'vln_pseudotime.pdf',sep=''),width=6, height=3)

@@ -154,7 +154,7 @@ df <- filter(df, gene_NKS != 'WT')
 df <- filter(df, gene_NKS %in% c('non-targeting','NR2E1','ARX','SOX2','ZNF219','NEUROD2'))%>%
     mutate(gene_NKS = replace(gene_NKS, gene_NKS == 'non-targeting', "NT"),
            stage = sub("#.*", "", batch))
-df$Clonal.cluster <- factor(df$Clonal.cluster, levels = c("RG/Astro-biased", "EN-biased", "EN/IN-biased", 'IN-biased',"Oligo-biased"))
+df$Clonal.cluster <- factor(df$Clonal.cluster, levels = c("RG-biased", "EN-biased", "EN/IN-biased", 'IN-biased',"Oligo-biased"))
 levels(df$Clonal.cluster)
 
 #human
@@ -309,7 +309,7 @@ dev.off()
 
 #dittoseq barplot for individual clones
 myplots <- list()
-for (cluster in c('EN-biased','IN-biased','IN/EN-biased','RG/Astro-biased','Oligo-biased')){
+for (cluster in c('EN-biased','IN-biased','IN/EN-biased','RG-biased','Oligo-biased')){
   myplots[[cluster]] <- dittoBarPlot(subset(ad,,ad$Clonal.cluster == cluster), retain.factor.levels = TRUE,
              var='class', group.by = 'unique_clone',xlab = '',main = cluster,ylab='Fraction',
              color.panel = brewer.pal(n=6,"Set3"),

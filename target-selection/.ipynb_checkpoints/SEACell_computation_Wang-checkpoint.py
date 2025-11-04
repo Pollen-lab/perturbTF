@@ -41,13 +41,6 @@ matplotlib.rcParams['figure.dpi'] = 100
 
 # # Load Data
 # 
-# We recommend the use of scanpy Anndata objects as the preferred mode of loading and filtering data.
-# 
-# A sample datset is available for download with the instructions listed below. This is a filtered, unnormalized counts of single-nuclear RNA-seq dataset of CD34+ sorted bone marrow cells to profile human hematopoiesis [Dataset ref TBD].
-# 
-# Uncomment the following lines to download the sample dataset in a Unix-based system. For non-UNIX systems, download the files using the URL
-
-# In[5]:
 
 
 #load data 
@@ -159,11 +152,6 @@ model.fit(min_iter=10, max_iter=50)
 # In[18]:
 
 
-# You can force the model to run additional iterations step-wise using the .step() function
-#print(f'Ran for {len(model.RSS_iters)} iterations')
-#for _ in range(5):
-#    model.step()
-#print(f'Ran for {len(model.RSS_iters)} iterations')
 
 
 # # Accessing results
@@ -179,10 +167,7 @@ model.plot_convergence()
 
 # ## SEACell Hard Assignments
 # 
-# These can be accessed as folows:
-# - in the modified anndata object in `.obs['SEAell']` 
-# - from the model using `.get_hard_assignments()` 
-# 
+
 
 # In[20]:
 
@@ -218,23 +203,12 @@ SEACell_ad.obs['subclass'] = ad.obs.groupby('SEACell').apply(lambda x: pd.Series
 rna_meta_ad.write(data_dir + '/rna_meta.h5ad')
 SEACell_ad.write(data_dir + '/atac_meta.h5ad')
 
-
-# ## Normalization
-
-# Normalization of metacell data can be performed using the `sc.pp.normalize_total` and `sc.pp.log1p` functions
-
 # # Evaluating Results
 # 
-# We provide several methods for evaluating SEACell assignments:
 
 # ## Visualizing Results
 # 
-# Metacells also implements methods for visualizing the results of the Metacells algorithm 
-#     <ul> 
-#         <li>```.plot_2D()``` provides an interface for viewing metacell assignments on any 2-dimensional embedding in ad.obsm. Plots can also be coloured by metacell assignment.
-#         <li>```.plot_SEACell_sizes()``` can be used to view the distribution of number of cells assigned to each metacell
-#     </ul>
-#     
+
 #             
 
 # In[30]:
@@ -256,13 +230,7 @@ SEACells.plot.plot_SEACell_sizes(ad, bins=5,save_as='dis_metacells.png')
 
 # ## Quantifying Results
 # 
-# SEACells also implements methods for visualizing the results of the SEACells algorithm 
-#     <ul> 
-#         <li>```.compute_celltype_purity(ad, col_name)``` computes the purity of different celltype labels within a SEACell metacell. Typically, col_name='celltype' or similar. Returns a pd.DataFrame of length n_SEACells.
-#         <li>```.compactness(ad, low_dim_embedding)``` computes the per-SEAcell variance in diffusion components. ```low_dim_embedding``` is a string specifying the low dimensional embedding with which diffusion components are calculated, typically 'X_pca' for RNA or 'X_svd' for ATAC. Lower values of compactness suggest more compact/lower variance metacells.
-#         <li>```separation(ad, low_dim_embedding,nth_nbr=1,cluster=None)``` computes the diffusion distance between a SEACell and its ```nth_nbr```. As before, ```low_dim_embedding``` is a string specifying the low dimensional embedding with which diffusion components are calculated, typically 'X_pca' for RNA or 'X_svd' for ATAC. If ```cluster``` is provided as a string, e.g. 'celltype', nearest neighbors are restricted to have the same celltype value.  Higher values of separation suggest better distinction between metacells.
-#     </ul>
-#     
+
 # 
 
 # In[33]:

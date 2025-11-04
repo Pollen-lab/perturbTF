@@ -5,18 +5,7 @@
 # # Kreigstein Lab Multiome
 # 
 # 
-# The data consists of *PBMC from a Healthy Donor - Granulocytes Removed Through Cell Sorting (3k)* which is freely available from 10x Genomics (click [here](https://www.10xgenomics.com/resources/datasets/pbmc-from-a-healthy-donor-granulocytes-removed-through-cell-sorting-3-k-1-standard-2-0-0), some personal information needs to be provided before you can gain access to the data). This is a multi-ome dataset.
-# 
-# <div class="alert alert-info">
-# 
-# **Note:**
-# 
-# In this notebook we will only show the minimal steps needed for running the SCENIC+ analysis. For more information on analysing scRNA-seq data and scATAC-seq data we refer the reader to other tutorials (e.g. [Scanpy](https://scanpy-tutorials.readthedocs.io/en/latest/index.html) and [pycisTopic](https://pycistopic.readthedocs.io/en/latest/) in python or [Seurat](https://satijalab.org/seurat/) and [cisTopic](https://github.com/aertslab/cisTopic) or [Signac](https://satijalab.org/signac/) in R).
-# 
-# </div>
-# 
-# 
-
+#
 # ## Set-up environment and download data 
 # We will first create a directory to store the data and results
 
@@ -49,26 +38,6 @@ if not os.path.exists(work_dir):
     os.makedirs(work_dir)
 
 
-# ## scRNA-seq preprocessing using Scanpy
-# First we preprocess the scRNA-seq side of the mutliome datasets. Most importantly we will use this side of the data to annotate celltypes. 
-# 
-# For this we will make use of [Scanpy](https://scanpy.readthedocs.io/en/stable/). 
-# 
-# 
-# <div class="alert alert-info">
-# 
-# **Note:**
-# 
-# You may also use [Seurat](https://satijalab.org/seurat/) (or any other tool in fact) to preprocess your data, however this will require some extra steps to import the data in python.
-# </div>
-# 
-# <div class="alert alert-info">
-# 
-# **Note:**
-# 
-# Further on in the actual SCENIC+ analysis the raw count matrix will be used.
-# </div>
-# 
 
 # In[5]:
 

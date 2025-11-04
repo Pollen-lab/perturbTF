@@ -5,21 +5,7 @@
 # # Kreigstein Lab Li Seacelled Multiome 
 # 
 # 
-# The data consists of *PBMC from a Healthy Donor - Granulocytes Removed Through Cell Sorting (3k)* which is freely available from 10x Genomics (click [here](https://www.10xgenomics.com/resources/datasets/pbmc-from-a-healthy-donor-granulocytes-removed-through-cell-sorting-3-k-1-standard-2-0-0), some personal information needs to be provided before you can gain access to the data). This is a multi-ome dataset.
 # 
-# <div class="alert alert-info">
-# 
-# **Note:**
-# 
-# In this notebook we will only show the minimal steps needed for running the SCENIC+ analysis. For more information on analysing scRNA-seq data and scATAC-seq data we refer the reader to other tutorials (e.g. [Scanpy](https://scanpy-tutorials.readthedocs.io/en/latest/index.html) and [pycisTopic](https://pycistopic.readthedocs.io/en/latest/) in python or [Seurat](https://satijalab.org/seurat/) and [cisTopic](https://github.com/aertslab/cisTopic) or [Signac](https://satijalab.org/signac/) in R).
-# 
-# </div>
-# 
-# 
-
-# ## Set-up environment and download data 
-# We will first create a directory to store the data and results
-
 # In[1]:
 
 
@@ -50,17 +36,6 @@ tmp_dir = '/wynton/scratch/jding/'
 # 
 # **Note:**
 # 
-# You may also use [Seurat](https://satijalab.org/seurat/) (or any other tool in fact) to preprocess your data, however this will require some extra steps to import the data in python.
-# </div>
-# 
-# <div class="alert alert-info">
-# 
-# **Note:**
-# 
-# Further on in the actual SCENIC+ analysis the raw count matrix will be used.
-# </div>
-# 
-
 # In[6]:
 
 
@@ -73,39 +48,6 @@ sc.settings.set_figure_params(dpi=80, frameon=False, figsize=(5, 5), facecolor='
 if not os.path.exists(os.path.join(work_dir, 'scRNA')):
     os.makedirs(os.path.join(work_dir, 'scRNA'))
 
-
-# We now have preprocessed the scRNA-seq side of the multiome data.
-# 
-# In particular we have:
-# 
-# 1. fitlered the data to only contain high quality cells.
-# 2. annotated cells to cell types.
-# 
-# We also did some preliminary visualization of the data for which we needed to normalize the gene expression counts. Note that SCENIC+ uses the raw gene expression counts (i.e. without normalization and scaling). We have kept this raw data in `adata.raw`.
-# 
-# Now that we have clusters of annotated cells we can continue with preprocessing the scATAC-seq data. There we will use the annotated clusters of cells to generate pseudobulk ATAC-seq profiles per cell type which will be used for peak calling.
-
-# ## scATAC-seq preprocessing using pycisTopic
-# 
-# Now we will preprocess the scATAC-seq side of the multiome data.
-# 
-# Most importantly we will:
-# 
-# 1. generate pseudobulk ATAC-seq profiles per cell type and call peaks
-# 2. merge these peaks into a consensus peak-set
-# 3. do quality control on the scATAC-seq barcodes
-# 4. run topic modeling to find sets of co-accessible regions and to impute chromatin accessibility resolving the issue of drop outs
-# 
-# For this we will use the python package [pycisTopic](https://pycistopic.readthedocs.io/en/latest/). 
-# 
-# <div class="alert alert-info">
-# 
-# **Note:**
-# 
-# pycisTopic can also be used for independent analysis of scATAC-seq data and has many more features which will not be demonstrated here. For more information see the read the docs page of [pycisTopic](https://pycistopic.readthedocs.io/en/latest/)
-# </div>
-
-# In[3]:
 
 
 import os
@@ -537,16 +479,6 @@ menr = dill.load(open(os.path.join(work_dir, 'motifs/menr.pkl'), 'rb'))
 menr['DEM_topics_otsu_All'].DEM_results('Topic8')
 
 
-# We now have completed all the steps necessary for starting the SCENIC+ analysis 😅.
-# 
-# In particalular, we have
-# 
-# 1. preprocessed the scRNA-seq side of the data, selecting high quality cells and annotation these cells.
-# 2. preprocessed the scATAC-seq side of the data, selecting high quality cells, performing topic modeling and identifying candidate enhacer regions.
-# 3. looked for enriched motifs in candidate enhancer regions.
-# 
-# In the next section we will combine all these analysis and run SCENIC+
-# 
 
 # ## inferring enhancer-driven Gene Regulatory Networks (eGRNs) using SCENIC+
 # 

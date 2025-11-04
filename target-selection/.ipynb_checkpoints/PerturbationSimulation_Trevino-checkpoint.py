@@ -1,29 +1,6 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# # Tutorial: Perturbation simulation
-# 
-# In this tutorial we illustrate how the predictions from SCENIC+ can be utilized to simulate the effect of transcription factor perturbations.
-# 
-# Here, the predictions of SCENIC+ serve as a feature selection method. We will use the expression of transcription factors (TFs) as predictors for their target gene expression. 
-# For this a random forest regression model will be fitted for each gene with the expression of TFs which are predicted to regulate them by SCENIC+ as predictor for their target gene expression.
-# After fitting the models we can alter the expression of a TF of choice and we can simulate a new gene expression matrix. This simulation is repeated for several iterations to simulate indirect effects.
-# The simulated cells in this new matrix can be projected in an embedding of choice to visualize the effect of the perturbation.
-# 
-# For this tutorial we will continue with the SCENIC+ analysis which he have done in the "Mix of melanoma cell lines" tutorial.
-
-# <div class="alert alert-warning">
-# 
-# **Warning:**
-# 
-# In order to continue you need to have the python package `velocyto` installed. 
-# </div>
-
-# In[ ]:
-
-
-#%pip install velocyto
-
 
 # ## Setting up work environment
 
@@ -49,9 +26,6 @@ import dill
 scplus_obj = dill.load(open(os.path.join(work_dir, 'scenicplus/scplus_obj.pkl'), 'rb'))
 
 
-#EN = scplus_obj.cell_data[scplus_obj.cell_data.GEX_celltype.isin(['RG','IPC','EN1','EN2','EN3','EN4','EN5','EN6'])].index.tolist()
-#scplus_obj = scplus_obj.subset(EN, copy=True)
-
 # Let's calculate a target gene based PCA embedding to plot the perturbations on
 
 # In[3]:
@@ -67,33 +41,12 @@ run_eRegulons_pca(
 
 
 # ## Plotting perturbation effect on an embedding
-# 
-# Let's simulate the effect of SOX10 knockdown. In this example of the melanoma cell lines it is known, from previous studies it is known that this perturbation can cause a phenotype swith of melanocytic states towards a more mesenchymal like state.
-# 
-# For the sake of computational time we will only simulate the expression of the top 200 highly variable genes.
-# 
-# You might opt to select more or all features, depending on your analysis
-
-# In[4]:
 
 
 from pycisTopic.diff_features import find_highly_variable_features
 hvg = find_highly_variable_features(scplus_obj.to_df('EXP')[list(set(scplus_obj.uns['eRegulon_metadata_filtered']['Gene']))].T, n_top_features = 200, plot = False)
 
 
-
-
-
-
-# We predict that MM074, MM057 and MM087 (intermidate melanocytic cell state) will move to the right along principle component 0 which in this case corresponds to MEL-MES variation.
-
-# ## Prioritizing TFs based on their preturbation effect.
-# 
-# We can also make use of the perturbation simulation to prioritize TFs for a certain effect. For example here we want to find TFs which will move cells along principle component 0 (i.e. change their state to a more melanocytic or mesenchymal one).
-# 
-# To do this we need some custom code.
-
-# In[5]:
 
 
 from scenicplus.simulation import *
