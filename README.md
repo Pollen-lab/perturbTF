@@ -1,6 +1,6 @@
 # Dissecting Gene Regulatory Networks Governing Human Cortical Cell Fate
 
-Scripts for analyses used in [**Dissecting Gene Regulatory Networks Governing Human Cortical Cell Fate**](https://www.biorxiv.org/content/10.1101/2025.09.23.678137v1). The raw reads for the macaque data, and processed data for both species can be found at GEO GSE284197. Processed human data is browsable through [UCSC broswer](http://cortical-lineage-perturb-44tf.cells.ucsc.edu/). 
+Scripts for analyses used in [**Dissecting Gene Regulatory Networks Governing Human Cortical Cell Fate**](https://www.nature.com/articles/s41586-025-09997-7). The raw reads for the macaque data, and processed data for both species can be found at GEO GSE284197. Processed human data is browsable through [UCSC broswer](http://cortical-lineage-perturb-44tf.cells.ucsc.edu/). 
 
 
 ## Usage
